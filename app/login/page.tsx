@@ -124,25 +124,6 @@ export default function LoginPage() {
     }, 400);
   };
 
-  const handleQuickDemoLogin = (role: UserRole) => {
-    setLoading(true);
-    setTimeout(() => {
-      if (role === 'client') {
-        const activeCodes = AuthStore.getBrokerCodes();
-        if (activeCodes.length > 0) {
-          AuthStore.verifyClientWithBrokerCode(activeCodes[0].code);
-          router.push('/projects/demo-project-green-valley/layout/demo-layout-green-valley-v1');
-        } else {
-          setErrorMsg('No registered broker access codes in the system yet. Please ask Developer Admin to register a broker.');
-          setLoading(false);
-        }
-      } else {
-        AuthStore.switchRole(role);
-        router.push('/dashboard');
-      }
-    }, 300);
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center p-4 relative overflow-hidden select-none">
       {/* Background Glow */}
@@ -362,43 +343,6 @@ export default function LoginPage() {
             </button>
           </form>
         )}
-
-        <div className="relative flex items-center justify-center my-4">
-          <div className="absolute inset-0 border-t border-slate-800" />
-          <span className="relative bg-slate-900 px-3 text-[11px] text-slate-500 font-medium uppercase">
-            Fast Demo Access
-          </span>
-        </div>
-
-        {/* Quick Demo Fast Access Grid */}
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            onClick={() => handleQuickDemoLogin('admin')}
-            className="p-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-center transition-all group"
-          >
-            <ShieldCheck className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
-            <span className="text-[10px] font-bold text-slate-300 block">Admin</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleQuickDemoLogin('broker')}
-            className="p-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-center transition-all group"
-          >
-            <Sparkles className="w-4 h-4 text-amber-400 mx-auto mb-1" />
-            <span className="text-[10px] font-bold text-amber-300 block">Broker</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleQuickDemoLogin('client')}
-            className="p-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-center transition-all group"
-          >
-            <Key className="w-4 h-4 text-cyan-400 mx-auto mb-1" />
-            <span className="text-[10px] font-bold text-cyan-300 block">Client</span>
-          </button>
-        </div>
       </div>
     </div>
   );
