@@ -65,33 +65,39 @@ export class AppState {
    * Comprehensive Supabase Cloud Synchronization
    */
   public static async syncFromSupabase() {
-    if (!isSupabaseConfigured()) return;
+    if (!isSupabaseConfigured()) {
+      console.warn('[Supabase Sync Warning] NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is missing or invalid in environment variables.');
+      return;
+    }
     try {
       const supabase = createClient();
       const store = this.getStore();
 
       // 1. Fetch Projects
       const { data: dbProjects, error: pErr } = await supabase.from('projects').select('*');
-      if (!pErr && dbProjects) {
+      if (pErr) console.error('[Supabase Error - Projects]:', pErr);
+      if (!pErr && dbProjects && dbProjects.length > 0) {
         store.projects = dbProjects;
       }
 
       // 2. Fetch Layouts
       const { data: dbLayouts, error: lErr } = await supabase.from('layouts').select('*');
-      if (!lErr && dbLayouts) {
+      if (lErr) console.error('[Supabase Error - Layouts]:', lErr);
+      if (!lErr && dbLayouts && dbLayouts.length > 0) {
         store.layouts = dbLayouts;
       }
 
       // 3. Fetch Plots
       const { data: dbPlots, error: plErr } = await supabase.from('plots').select('*');
-      if (!plErr && dbPlots) {
+      if (plErr) console.error('[Supabase Error - Plots]:', plErr);
+      if (!plErr && dbPlots && dbPlots.length > 0) {
         store.plots = dbPlots;
       }
 
       saveData(store);
-      console.log('[Supabase Cloud Sync] Clean store updated from Supabase database.');
+      console.log('[Supabase Cloud Sync] Store synchronized with Supabase database.');
     } catch (err) {
-      console.warn('Supabase cloud sync warning:', err);
+      console.warn('Supabase cloud sync exception:', err);
     }
   }
 

@@ -24,7 +24,12 @@ export class AuthStore {
    * Synchronize Users, Broker Codes, and Plot Holds from Supabase Cloud Database
    */
   static async syncFromSupabase() {
-    if (!isSupabaseConfigured() || typeof window === 'undefined') return;
+    if (!isSupabaseConfigured() || typeof window === 'undefined') {
+      if (typeof window !== 'undefined' && !isSupabaseConfigured()) {
+        console.warn('[Supabase Auth Warning] NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY is missing or invalid in environment variables.');
+      }
+      return;
+    }
     try {
       const supabase = createClient();
 
