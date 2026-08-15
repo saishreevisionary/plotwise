@@ -182,6 +182,14 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({ currentUser, onOpe
 
   // --- CLIENT DASHBOARD VIEW ---
   if (currentUser.role === 'client') {
+    const assignedBroker = users.find(
+      (u) => u.id === currentUser.assigned_broker_id || (u.broker_code && u.broker_code === currentUser.broker_code)
+    );
+    const brokerName = assignedBroker ? assignedBroker.name : 'Priyanka';
+    const agencyName = assignedBroker ? (assignedBroker.agency_name || 'priyanka brokers') : 'priyanka brokers';
+    const brokerPhone = assignedBroker ? (assignedBroker.phone || '9876541230') : '9876541230';
+    const initials = brokerName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'PB';
+
     return (
       <div className="space-y-6">
         {/* Client Welcome Banner */}
@@ -207,16 +215,16 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({ currentUser, onOpe
             </span>
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center justify-center font-bold text-sm">
-                VM
+                {initials}
               </div>
               <div>
-                <span className="font-extrabold text-white block">Dr. Vikram Mehta</span>
-                <span className="text-[11px] text-amber-300 block">Apex Realty Group</span>
+                <span className="font-extrabold text-white block">{brokerName}</span>
+                <span className="text-[11px] text-amber-300 block">{agencyName}</span>
               </div>
             </div>
             <div className="pt-2 border-t border-slate-800 flex items-center gap-2 text-slate-300 text-[11px]">
               <PhoneCall className="w-3.5 h-3.5 text-emerald-400" />
-              <span>+91 98765 43210</span>
+              <span>{brokerPhone}</span>
             </div>
           </div>
         </div>
@@ -305,23 +313,44 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({ currentUser, onOpe
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          {registeredBrokers.map((b) => (
-            <div key={b.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-extrabold text-white text-sm">{b.name}</span>
-                <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold text-[11px]">
-                  {b.broker_code || 'BRK'}
-                </span>
-              </div>
-              <p className="text-slate-400 text-[11px]">{b.agency_name || 'Apex Realty Group'}</p>
-              <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px]">
-                <span className="text-slate-400">Email: <span className="text-slate-200 font-semibold">{b.email}</span></span>
-                <span className="text-indigo-300 font-semibold">{b.phone}</span>
-              </div>
+        {registeredBrokers.length === 0 ? (
+          <div className="p-8 rounded-2xl bg-slate-950 border border-slate-800 border-dashed text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center mx-auto">
+              <Users className="w-6 h-6" />
             </div>
-          ))}
-        </div>
+            <div>
+              <h3 className="font-extrabold text-white text-sm">No Registered Brokers Yet</h3>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
+                You haven't registered any real estate brokers. Click '+ Register Broker' to onboard authorized brokers and issue referral codes.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsBrokerModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs shadow-lg transition-all inline-flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Register First Broker</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            {registeredBrokers.map((b) => (
+              <div key={b.id} className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-white text-sm">{b.name}</span>
+                  <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold text-[11px]">
+                    {b.broker_code || 'BRK'}
+                  </span>
+                </div>
+                <p className="text-slate-400 text-[11px]">{b.agency_name || 'Apex Realty Group'}</p>
+                <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">Email: <span className="text-slate-200 font-semibold">{b.email}</span></span>
+                  <span className="text-indigo-300 font-semibold">{b.phone}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <CreateBrokerModal

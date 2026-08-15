@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, UserPlus, User, Mail, Phone, Key, CheckCircle2, Copy } from 'lucide-react';
+import { X, UserPlus, User, Mail, Phone, Key, CheckCircle2, Lock } from 'lucide-react';
 import { AuthStore } from '@/lib/store/auth-store';
 import { UserProfile } from '@/types';
 
@@ -21,6 +21,7 @@ export const CreateClientModal: React.FC<CreateClientModalProps> = ({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('password123');
   const [submitting, setSubmitting] = useState(false);
   const [successClient, setSuccessClient] = useState<UserProfile | null>(null);
 
@@ -37,6 +38,7 @@ export const CreateClientModal: React.FC<CreateClientModalProps> = ({
         name,
         email,
         phone,
+        password,
         broker_code: brokerCode,
         broker_id: activeBroker.id,
       });
@@ -51,6 +53,7 @@ export const CreateClientModal: React.FC<CreateClientModalProps> = ({
         setName('');
         setEmail('');
         setPhone('');
+        setPassword('password123');
       }, 1500);
     }, 400);
   };
@@ -111,6 +114,21 @@ export const CreateClientModal: React.FC<CreateClientModalProps> = ({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="client@gmail.com"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-slate-300 font-semibold block">Client Login Password</label>
+              <div className="relative flex items-center">
+                <Lock className="w-4 h-4 absolute left-3 text-slate-400" />
+                <input
+                  type="text"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="e.g. password123"
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
                 />
               </div>

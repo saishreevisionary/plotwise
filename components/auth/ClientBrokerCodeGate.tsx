@@ -107,38 +107,35 @@ export const ClientBrokerCodeGate: React.FC<ClientBrokerCodeGateProps> = ({
           </button>
         </form>
 
-        {/* Quick Demo Tester */}
-        <div className="pt-4 border-t border-slate-800 space-y-2">
-          <span className="text-[11px] font-semibold text-slate-500 block text-center uppercase tracking-wider">
-            Quick Test Demo Broker Codes:
-          </span>
+        {/* Registered Broker Codes List */}
+        {(() => {
+          const activeCodes = AuthStore.getBrokerCodes();
+          if (activeCodes.length === 0) return null;
+          return (
+            <div className="pt-4 border-t border-slate-800 space-y-2">
+              <span className="text-[11px] font-semibold text-slate-500 block text-center uppercase tracking-wider">
+                Registered Broker Access Codes:
+              </span>
 
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickTestCode('BRK-VIP-909')}
-              className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition-all group"
-            >
-              <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-300 group-hover:text-indigo-200">
-                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                <span>BRK-VIP-909</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {activeCodes.map((bc) => (
+                  <button
+                    key={bc.code}
+                    type="button"
+                    onClick={() => handleQuickTestCode(bc.code)}
+                    className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition-all group"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300 group-hover:text-amber-200">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{bc.code}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate mt-0.5">{bc.broker_name} ({bc.agency_name})</p>
+                  </button>
+                ))}
               </div>
-              <p className="text-[10px] text-slate-400 truncate mt-0.5">Dr. Vikram Mehta (Apex)</p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickTestCode('AGENT-SHARMA-42')}
-              className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition-all group"
-            >
-              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300 group-hover:text-amber-200">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>AGENT-SHARMA-42</span>
-              </div>
-              <p className="text-[10px] text-slate-400 truncate mt-0.5">Sarah Jenkins (Prime)</p>
-            </button>
-          </div>
-        </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

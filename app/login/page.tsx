@@ -11,17 +11,18 @@ export default function LoginPage() {
   const [activeRoleTab, setActiveRoleTab] = useState<UserRole>('admin');
 
   // Admin form state
-  const [adminEmail, setAdminEmail] = useState('admin@plotwise.ai');
-  const [adminPassword, setAdminPassword] = useState('••••••••••••');
+  const [adminEmail, setAdminEmail] = useState('admin@plotwise.com');
+  const [adminPassword, setAdminPassword] = useState('admin123');
 
   // Broker form state
-  const [brokerEmail, setBrokerEmail] = useState('vikram.mehta@realtybrokers.com');
-  const [brokerCodeInput, setBrokerCodeInput] = useState('BRK-VIP-909');
+  const [brokerEmail, setBrokerEmail] = useState('');
+  const [brokerPassword, setBrokerPassword] = useState('password123');
+  const [brokerCodeInput, setBrokerCodeInput] = useState('');
 
   // Client form state
-  const [clientName, setClientName] = useState('Rajesh Sharma');
-  const [clientPhone, setClientPhone] = useState('+91 98123 45678');
-  const [clientBrokerCode, setClientBrokerCode] = useState('BRK-VIP-909');
+  const [clientEmail, setClientEmail] = useState('');
+  const [clientPassword, setClientPassword] = useState('password123');
+  const [clientBrokerCode, setClientBrokerCode] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -32,8 +33,13 @@ export default function LoginPage() {
     setErrorMsg(null);
 
     setTimeout(() => {
-      AuthStore.switchRole('admin');
-      router.push('/dashboard');
+      const res = AuthStore.authenticateUser(adminEmail, adminPassword, 'admin');
+      if (res.success) {
+        router.push('/dashboard');
+      } else {
+        setErrorMsg(res.message || 'Invalid Developer Admin credentials.');
+        setLoading(false);
+      }
     }, 400);
   };
 
@@ -43,14 +49,44 @@ export default function LoginPage() {
     setErrorMsg(null);
 
     setTimeout(() => {
-      const valid = AuthStore.validateBrokerCode(brokerCodeInput);
-      if (valid) {
-        AuthStore.switchRole('broker');
-        router.push('/dashboard');
-      } else {
-        setErrorMsg('Invalid Broker Code. Try demo code BRK-VIP-909');
-        setLoading(false);
+      const cleanEmail = brokerEmail.trim().toLowerCase();
+      const cleanCode = brokerCodeInput.trim().toUpperCase();
+
+      const users = AuthStore.getAllUsers();
+      
+      // 1. Find registered broker account by email (or by code if email is empty)
+      let brokerUser = users.find(
+        (u) => u.role === 'broker' && cleanEmail !== '' && u.email.trim().toLowerCase() === cleanEmail
+      );
+
+      if (!brokerUser && cleanCode) {
+        brokerUser = users.find(
+          (u) => u.role === 'broker' && u.broker_code?.toUpperCase() === cleanCode
+        );
       }
+
+      if (!brokerUser) {
+        setErrorMsg('Broker account not found. Please check your Email or Username.');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Strict Access Code Check: If a code is entered, it MUST match the registered broker's code!
+      if (cleanCode && brokerUser.broker_code?.toUpperCase() !== cleanCode) {
+        setErrorMsg(`Invalid Broker Access Code. The code '${cleanCode}' does not match this broker account.`);
+        setLoading(false);
+        return;
+      }
+
+      // 3. Password Verification
+      if (brokerPassword && brokerUser.password && brokerUser.password !== brokerPassword.trim()) {
+        setErrorMsg('Invalid broker password. Please enter the correct password.');
+        setLoading(false);
+        return;
+      }
+
+      AuthStore.setCurrentUser(brokerUser);
+      router.push('/dashboard');
     }, 400);
   };
 
@@ -60,11 +96,25 @@ export default function LoginPage() {
     setErrorMsg(null);
 
     setTimeout(() => {
-      const res = AuthStore.verifyClientWithBrokerCode(clientBrokerCode);
+      const cleanCode = clientBrokerCode.trim().toUpperCase();
+      const validBroker = AuthStore.validateBrokerCode(cleanCode);
+
+      if (!validBroker) {
+        setErrorMsg('Invalid Broker Access Code. Access Denied.');
+        setLoading(false);
+        return;
+      }
+
+      const res = AuthStore.authenticateClient({
+        email: clientEmail,
+        password: clientPassword,
+        broker_code: cleanCode,
+      });
+
       if (res.success) {
-        router.push('/projects/demo-project-green-valley/layout/demo-layout-green-valley-v1');
+        router.push('/dashboard');
       } else {
-        setErrorMsg(res.message || 'Invalid Broker Code.');
+        setErrorMsg(res.message || 'Invalid Client Credentials.');
         setLoading(false);
       }
     }, 400);
@@ -74,8 +124,14 @@ export default function LoginPage() {
     setLoading(true);
     setTimeout(() => {
       if (role === 'client') {
-        AuthStore.verifyClientWithBrokerCode('BRK-VIP-909');
-        router.push('/projects/demo-project-green-valley/layout/demo-layout-green-valley-v1');
+        const activeCodes = AuthStore.getBrokerCodes();
+        if (activeCodes.length > 0) {
+          AuthStore.verifyClientWithBrokerCode(activeCodes[0].code);
+          router.push('/projects/demo-project-green-valley/layout/demo-layout-green-valley-v1');
+        } else {
+          setErrorMsg('No registered broker access codes in the system yet. Please ask Developer Admin to register a broker.');
+          setLoading(false);
+        }
       } else {
         AuthStore.switchRole(role);
         router.push('/dashboard');
@@ -164,11 +220,11 @@ export default function LoginPage() {
               <div className="relative flex items-center">
                 <Mail className="w-4 h-4 absolute left-3 text-slate-400" />
                 <input
-                  type="email"
+                  type="text"
                   required
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="admin@realestate.com"
+                  placeholder="admin@plotwise.com"
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
                 />
               </div>
@@ -248,15 +304,30 @@ export default function LoginPage() {
         {activeRoleTab === 'client' && (
           <form onSubmit={handleClientSubmit} className="space-y-4 text-xs">
             <div className="space-y-1">
-              <label className="text-slate-300 font-semibold block">Your Name & Phone</label>
+              <label className="text-slate-300 font-semibold block">Client Email Address</label>
               <div className="relative flex items-center">
-                <Phone className="w-4 h-4 absolute left-3 text-slate-400" />
+                <Mail className="w-4 h-4 absolute left-3 text-slate-400" />
                 <input
-                  type="text"
+                  type="email"
                   required
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  placeholder="Mr. Rajesh Sharma"
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                  placeholder="sri@plotwise.com"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-slate-300 font-semibold block">Password</label>
+              <div className="relative flex items-center">
+                <Lock className="w-4 h-4 absolute left-3 text-slate-400" />
+                <input
+                  type="password"
+                  required
+                  value={clientPassword}
+                  onChange={(e) => setClientPassword(e.target.value)}
+                  placeholder="••••••••••••"
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none"
                 />
               </div>
@@ -271,7 +342,7 @@ export default function LoginPage() {
                   required
                   value={clientBrokerCode}
                   onChange={(e) => setClientBrokerCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. BRK-VIP-909"
+                  placeholder="e.g. 123"
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-cyan-300 font-mono font-bold placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none uppercase"
                 />
               </div>
@@ -282,7 +353,7 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold shadow-lg shadow-cyan-500/20 transition-all flex items-center justify-center gap-2"
             >
-              <span>{loading ? 'Verifying Code...' : 'Access Client 3D Portal'}</span>
+              <span>{loading ? 'Authenticating Client...' : 'Sign In as Client Buyer'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>

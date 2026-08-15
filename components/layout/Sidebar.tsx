@@ -87,14 +87,26 @@ export const Sidebar: React.FC = () => {
         )}
 
         {currentUser.role === 'client' && (
-          <div className="p-3.5 rounded-xl bg-gradient-to-b from-cyan-950/30 to-slate-900 border border-cyan-500/20 text-xs text-slate-300 space-y-2">
-            <div className="flex items-center gap-1.5 text-cyan-300 font-semibold">
-              <ShieldCheck className="w-4 h-4 text-cyan-400" />
-              <span>Assigned Broker</span>
-            </div>
-            <p className="text-white font-bold text-xs">Dr. Vikram Mehta</p>
-            <p className="text-slate-400 text-[11px]">Apex Realty Group (+91 98765 43210)</p>
-          </div>
+          (() => {
+            const allUsers = AuthStore.getAllUsers();
+            const broker = allUsers.find(
+              (u) => u.id === currentUser.assigned_broker_id || (u.broker_code && u.broker_code === currentUser.broker_code)
+            );
+            const bName = broker ? broker.name : 'Priyanka';
+            const bAgency = broker ? (broker.agency_name || 'priyanka brokers') : 'priyanka brokers';
+            const bPhone = broker ? (broker.phone || '9876541230') : '9876541230';
+
+            return (
+              <div className="p-3.5 rounded-xl bg-gradient-to-b from-cyan-950/30 to-slate-900 border border-cyan-500/20 text-xs text-slate-300 space-y-2">
+                <div className="flex items-center gap-1.5 text-cyan-300 font-semibold">
+                  <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                  <span>Assigned Broker</span>
+                </div>
+                <p className="text-white font-bold text-xs">{bName}</p>
+                <p className="text-slate-400 text-[11px]">{bAgency} ({bPhone})</p>
+              </div>
+            );
+          })()
         )}
 
         {currentUser.role === 'admin' && (
