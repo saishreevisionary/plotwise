@@ -134,7 +134,10 @@ export default function InteractiveMapPage({
     newStatus: PlotStatus,
     notes?: string,
     custName?: string,
-    custPhone?: string
+    custPhone?: string,
+    deedNumber?: string,
+    paymentRef?: string,
+    tokenAmount?: number
   ) => {
     const updated = AppState.updatePlotStatus(
       plotId,
@@ -142,7 +145,10 @@ export default function InteractiveMapPage({
       currentUser.name || 'Sales Manager',
       notes,
       custName,
-      custPhone
+      custPhone,
+      deedNumber,
+      paymentRef,
+      tokenAmount
     );
 
     if (updated) {

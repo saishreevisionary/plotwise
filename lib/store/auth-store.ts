@@ -10,7 +10,7 @@ const PLOT_HOLDS_STORAGE_KEY = 'plotwise_ai_plot_holds_v3';
 
 export const DEFAULT_ADMIN: UserProfile = {
   id: 'usr-admin-1',
-  name: 'Alex Morgan',
+  name: 'Sachin',
   email: 'admin@plotwise.com',
   password: 'admin123',
   role: 'admin',
@@ -77,7 +77,7 @@ export class AuthStore {
     try {
       const stored = localStorage.getItem(USERS_STORAGE_KEY);
       if (stored) return JSON.parse(stored);
-    } catch (e) {}
+    } catch (e) { }
 
     const initial = [DEFAULT_ADMIN];
     localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(initial));
@@ -91,7 +91,7 @@ export class AuthStore {
     try {
       const stored = localStorage.getItem(AUTH_SESSION_KEY);
       if (stored) return JSON.parse(stored);
-    } catch (e) {}
+    } catch (e) { }
 
     this.setCurrentUser(DEFAULT_ADMIN);
     return DEFAULT_ADMIN;
@@ -101,7 +101,7 @@ export class AuthStore {
     if (typeof window !== 'undefined') {
       try {
         localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(user));
-      } catch (e) {}
+      } catch (e) { }
     }
   }
 
@@ -240,7 +240,7 @@ export class AuthStore {
       try {
         const stored = localStorage.getItem(BROKER_CODES_STORAGE_KEY);
         if (stored) storedCodes = JSON.parse(stored);
-      } catch (e) {}
+      } catch (e) { }
     }
 
     // Merge derived codes from registered users who have a role === 'broker'
@@ -268,6 +268,18 @@ export class AuthStore {
     });
 
     return Array.from(map.values());
+  }
+
+  static getAssignedBrokerForClient(client: UserProfile): UserProfile | undefined {
+    const users = this.getAllUsers();
+    return users.find(
+      (u) =>
+        u.role === 'broker' &&
+        (u.id === client.assigned_broker_id ||
+          (Boolean(u.broker_code) &&
+            Boolean(client.broker_code) &&
+            u.broker_code!.trim().toUpperCase() === client.broker_code!.trim().toUpperCase()))
+    );
   }
 
   static validateBrokerCode(code: string): BrokerCode | undefined {
@@ -443,7 +455,7 @@ export class AuthStore {
     try {
       const stored = localStorage.getItem(PLOT_HOLDS_STORAGE_KEY);
       if (stored) return JSON.parse(stored);
-    } catch (e) {}
+    } catch (e) { }
     return [];
   }
 

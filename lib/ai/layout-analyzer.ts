@@ -307,7 +307,7 @@ Return ONLY valid JSON matching this schema:
           ],
           area: 1200,
           facing: col % 2 === 0 ? 'North' : 'South',
-          price: 3000000,
+          price: 0,
           confidence: 0.98,
         });
       }
@@ -336,7 +336,7 @@ Return ONLY valid JSON matching this schema:
           ],
           area: 1500,
           facing: col % 2 === 0 ? 'North' : 'South',
-          price: 3750000,
+          price: 0,
           confidence: 0.98,
         });
       }

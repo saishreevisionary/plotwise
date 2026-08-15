@@ -57,6 +57,9 @@ export interface Plot {
   customer_name?: string;
   customer_phone?: string;
   booking_date?: string;
+  deed_number?: string;
+  payment_ref?: string;
+  token_amount?: number;
   polygon_coordinates: PolygonPoint[];
   ai_confidence: number;
   ai_detected: boolean;

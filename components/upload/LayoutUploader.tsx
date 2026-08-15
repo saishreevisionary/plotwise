@@ -135,7 +135,7 @@ export const LayoutUploader: React.FC<LayoutUploaderProps> = ({
           layout_id: layout.id,
           plot_number: p.plot_number || `${idx + 1}`,
           area: p.area,
-          price: p.price || p.area * 2400,
+          price: p.price || 0,
           facing: p.facing,
           status: 'available',
           polygon_coordinates: p.polygon,

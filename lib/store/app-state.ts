@@ -289,7 +289,10 @@ export class AppState {
     changedBy: string = 'User',
     notes?: string,
     customerName?: string,
-    customerPhone?: string
+    customerPhone?: string,
+    deedNumber?: string,
+    paymentRef?: string,
+    tokenAmount?: number
   ): Plot | null {
     const store = this.getStore();
     const plot = store.plots.find((p) => p.id === plotId);
@@ -300,11 +303,17 @@ export class AppState {
 
     if (customerName !== undefined) plot.customer_name = customerName;
     if (customerPhone !== undefined) plot.customer_phone = customerPhone;
+    if (deedNumber !== undefined) plot.deed_number = deedNumber;
+    if (paymentRef !== undefined) plot.payment_ref = paymentRef;
+    if (tokenAmount !== undefined) plot.token_amount = tokenAmount;
 
     if (newStatus === 'available') {
       if (!customerName) plot.customer_name = undefined;
       if (!customerPhone) plot.customer_phone = undefined;
       plot.booking_date = undefined;
+      plot.deed_number = undefined;
+      plot.payment_ref = undefined;
+      plot.token_amount = undefined;
     } else {
       if (!plot.booking_date) plot.booking_date = new Date().toISOString();
     }
@@ -512,7 +521,7 @@ export class AppState {
           layout_id: targetPlot.layout_id,
           plot_number: `${currentNum}`,
           area: subArea || 1440,
-          price: (subArea || 1440) * 2400,
+          price: 0,
           facing: targetPlot.facing || 'North',
           status: 'available',
           polygon_coordinates: subPoly,
@@ -566,7 +575,7 @@ export class AppState {
       layout_id: layoutId,
       plot_number: p.plot_number,
       area: p.area,
-      price: p.price || p.area * 2500,
+      price: p.price || 0,
       facing: p.facing,
       status: 'available',
       polygon_coordinates: p.polygon,

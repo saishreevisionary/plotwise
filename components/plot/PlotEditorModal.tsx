@@ -21,7 +21,7 @@ export const PlotEditorModal: React.FC<PlotEditorModalProps> = ({
 }) => {
   const [plotNumber, setPlotNumber] = useState('');
   const [area, setArea] = useState<number>(1200);
-  const [price, setPrice] = useState<number>(1800000);
+  const [price, setPrice] = useState<number>(0);
   const [facing, setFacing] = useState<FacingDirection>('East');
   const [status, setStatus] = useState<PlotStatus>('available');
   const [customerName, setCustomerName] = useState('');
@@ -31,7 +31,7 @@ export const PlotEditorModal: React.FC<PlotEditorModalProps> = ({
     if (plot) {
       setPlotNumber(plot.plot_number);
       setArea(plot.area);
-      setPrice(plot.price);
+      setPrice(plot.price || 0);
       setFacing(plot.facing);
       setStatus(plot.status);
       setCustomerName(plot.customer_name || '');
@@ -39,7 +39,7 @@ export const PlotEditorModal: React.FC<PlotEditorModalProps> = ({
     } else {
       setPlotNumber('A-41');
       setArea(1500);
-      setPrice(2250000);
+      setPrice(0);
       setFacing('East');
       setStatus('available');
       setCustomerName('');

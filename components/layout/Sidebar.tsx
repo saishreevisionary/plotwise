@@ -18,20 +18,17 @@ export const Sidebar: React.FC = () => {
       return [
         { label: 'Broker Hub', href: '/dashboard', icon: LayoutDashboard },
         { label: 'Assigned Layouts', href: '/projects', icon: FolderKanban },
-        { label: 'Green Valley 3D', href: '/projects/demo-project-green-valley/layout/demo-layout-green-valley-v1', icon: Sparkles, highlight: true },
       ];
     } else if (currentUser.role === 'client') {
       return [
         { label: 'Buyer Portal', href: '/dashboard', icon: LayoutDashboard },
         { label: 'Featured Sites', href: '/projects', icon: FolderKanban },
-        { label: '3D Site Twin', href: '/projects/demo-project-green-valley/layout/demo-layout-green-valley-v1', icon: Sparkles, highlight: true },
       ];
     }
 
     return [
       { label: 'Master Dashboard', href: '/dashboard', icon: LayoutDashboard },
       { label: 'All Projects', href: '/projects', icon: FolderKanban },
-      { label: 'Green Valley (Demo)', href: '/projects/demo-project-green-valley/layout/demo-layout-green-valley-v1', icon: Sparkles, highlight: true },
     ];
   };
 
@@ -58,12 +55,10 @@ export const Sidebar: React.FC = () => {
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive
                     ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/30 font-semibold'
-                    : item.highlight
-                    ? 'text-amber-300 hover:bg-amber-500/10 hover:text-amber-200'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-400' : item.highlight ? 'text-amber-400' : 'text-slate-400'}`} />
+                <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
                 <span>{item.label}</span>
               </Link>
             );
@@ -88,13 +83,10 @@ export const Sidebar: React.FC = () => {
 
         {currentUser.role === 'client' && (
           (() => {
-            const allUsers = AuthStore.getAllUsers();
-            const broker = allUsers.find(
-              (u) => u.id === currentUser.assigned_broker_id || (u.broker_code && u.broker_code === currentUser.broker_code)
-            );
+            const broker = AuthStore.getAssignedBrokerForClient(currentUser);
             const bName = broker ? broker.name : 'Priyanka';
             const bAgency = broker ? (broker.agency_name || 'priyanka brokers') : 'priyanka brokers';
-            const bPhone = broker ? (broker.phone || '9876541230') : '9876541230';
+            const bPhone = broker ? (broker.phone || '7531594560') : '7531594560';
 
             return (
               <div className="p-3.5 rounded-xl bg-gradient-to-b from-cyan-950/30 to-slate-900 border border-cyan-500/20 text-xs text-slate-300 space-y-2">

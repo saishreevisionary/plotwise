@@ -182,12 +182,10 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({ currentUser, onOpe
 
   // --- CLIENT DASHBOARD VIEW ---
   if (currentUser.role === 'client') {
-    const assignedBroker = users.find(
-      (u) => u.id === currentUser.assigned_broker_id || (u.broker_code && u.broker_code === currentUser.broker_code)
-    );
+    const assignedBroker = AuthStore.getAssignedBrokerForClient(currentUser);
     const brokerName = assignedBroker ? assignedBroker.name : 'Priyanka';
     const agencyName = assignedBroker ? (assignedBroker.agency_name || 'priyanka brokers') : 'priyanka brokers';
-    const brokerPhone = assignedBroker ? (assignedBroker.phone || '9876541230') : '9876541230';
+    const brokerPhone = assignedBroker ? (assignedBroker.phone || '7531594560') : '7531594560';
     const initials = brokerName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'PB';
 
     return (

@@ -1,30 +1,42 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Plot, PlotStatusHistory, PlotStatus } from '@/types';
+import { Plot, PlotStatusHistory, PlotStatus, UserProfile } from '@/types';
 import { StatusBadge, AiConfidenceBadge } from '@/components/common/StatusBadge';
+import { AuthStore } from '@/lib/store/auth-store';
+import { BrokerPlotActionModal } from '@/components/plot/BrokerPlotActionModal';
+import { ClientPlotBookingModal } from '@/components/plot/ClientPlotBookingModal';
 import {
   X,
   Edit3,
   Calendar,
-  DollarSign,
   Maximize2,
   Compass,
   UserCheck,
-  Phone,
-  Clock,
   History,
-  Trash2,
-  CheckCircle2,
-  AlertCircle,
   TrendingUp,
+  FileCheck,
+  Sparkles,
+  Key,
+  ShieldCheck,
+  CheckCircle2,
+  Lock,
 } from 'lucide-react';
 
 interface PlotDetailsPanelProps {
   plot: Plot | null;
   history: PlotStatusHistory[];
   onClose: () => void;
-  onStatusChange: (plotId: string, newStatus: PlotStatus, notes?: string, custName?: string, custPhone?: string) => void;
+  onStatusChange: (
+    plotId: string,
+    newStatus: PlotStatus,
+    notes?: string,
+    custName?: string,
+    custPhone?: string,
+    deedNumber?: string,
+    paymentRef?: string,
+    tokenAmount?: number
+  ) => void;
   onEditClick: (plot: Plot) => void;
   onDeleteClick: (plotId: string) => void;
   onSplitClick?: (plot: Plot) => void;
@@ -43,16 +55,27 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [targetStatus, setTargetStatus] = useState<PlotStatus>('booked');
 
+  // Broker Modal State
+  const [isBrokerModalOpen, setIsBrokerModalOpen] = useState(false);
+  const [brokerTargetAction, setBrokerTargetAction] = useState<'book' | 'sold'>('book');
+
+  // Client Modal State
+  const [isClientBookingModalOpen, setIsClientBookingModalOpen] = useState(false);
+
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [notes, setNotes] = useState('');
 
   if (!plot) return null;
 
+  const currentUser: UserProfile = AuthStore.getCurrentUser();
+  const assignedBroker = AuthStore.getAssignedBrokerForClient(currentUser);
+
   const formatPrice = (val: number) => {
+    if (!val || val === 0) return '₹0';
     if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)} Cr`;
     if (val >= 100000) return `₹${(val / 100000).toFixed(2)} Lakh`;
-    return `₹${val.toLocaleString()}`;
+    return `₹${val.toLocaleString('en-IN')}`;
   };
 
   const handleApplyStatusChange = (e: React.FormEvent) => {
@@ -62,6 +85,46 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
     setCustomerName('');
     setCustomerPhone('');
     setNotes('');
+  };
+
+  const handleBrokerConfirm = (data: {
+    status: 'booked' | 'sold';
+    customerName: string;
+    customerPhone: string;
+    notes?: string;
+    deedNumber?: string;
+    paymentRef?: string;
+    tokenAmount?: number;
+  }) => {
+    onStatusChange(
+      plot.id,
+      data.status,
+      data.notes,
+      data.customerName,
+      data.customerPhone,
+      data.deedNumber,
+      data.paymentRef,
+      data.tokenAmount
+    );
+  };
+
+  const handleClientConfirmBooking = (data: {
+    customerName: string;
+    customerPhone: string;
+    tokenAmount: number;
+    paymentRef: string;
+    notes?: string;
+  }) => {
+    onStatusChange(
+      plot.id,
+      'booked',
+      data.notes,
+      data.customerName,
+      data.customerPhone,
+      undefined,
+      data.paymentRef,
+      data.tokenAmount
+    );
   };
 
   return (
@@ -115,23 +178,149 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         {activeTab === 'details' ? (
           <>
-            {/* Status Card */}
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-medium text-slate-400 block mb-1">Current Availability</span>
-                <StatusBadge status={plot.status} size="lg" />
+            {/* Role-Tailored Availability & Action Card */}
+            <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-medium text-slate-400 block mb-1">Current Availability</span>
+                  <StatusBadge status={plot.status} size="lg" />
+                </div>
+
+                {/* ADMIN ROLE ACTIONS */}
+                {currentUser.role === 'admin' && (
+                  <button
+                    onClick={() => {
+                      setTargetStatus(plot.status === 'available' ? 'booked' : plot.status);
+                      setCustomerName(plot.customer_name || '');
+                      setCustomerPhone(plot.customer_phone || '');
+                      setShowStatusModal(true);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all shadow-md"
+                  >
+                    Change Status
+                  </button>
+                )}
               </div>
-              <button
-                onClick={() => {
-                  setTargetStatus(plot.status === 'available' ? 'booked' : plot.status);
-                  setCustomerName(plot.customer_name || '');
-                  setCustomerPhone(plot.customer_phone || '');
-                  setShowStatusModal(true);
-                }}
-                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all shadow-md"
-              >
-                Change Status
-              </button>
+
+              {/* BROKER ROLE ACTIONS */}
+              {currentUser.role === 'broker' && (
+                <div className="pt-2 border-t border-slate-900 flex flex-col gap-2">
+                  {plot.status === 'available' && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setBrokerTargetAction('book');
+                          setIsBrokerModalOpen(true);
+                        }}
+                        className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <UserCheck className="w-4 h-4" />
+                        <span>Book Plot for Client</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setBrokerTargetAction('sold');
+                          setIsBrokerModalOpen(true);
+                        }}
+                        className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold shadow-lg shadow-rose-600/20 transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <FileCheck className="w-4 h-4" />
+                        <span>Mark as Sold (Legal Deed)</span>
+                      </button>
+                    </>
+                  )}
+
+                  {plot.status === 'booked' && (
+                    <button
+                      onClick={() => {
+                        setBrokerTargetAction('sold');
+                        setIsBrokerModalOpen(true);
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold shadow-lg shadow-rose-600/20 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <FileCheck className="w-4 h-4" />
+                      <span>Convert Booking to Sold (Legal Deed)</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* CLIENT ROLE ACTIONS */}
+              {currentUser.role === 'client' && (
+                <div className="pt-2 border-t border-slate-900">
+                  {plot.status === 'available' ? (
+                    <button
+                      onClick={() => setIsClientBookingModalOpen(true)}
+                      className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-500 to-indigo-600 hover:scale-[1.02] text-white text-xs font-extrabold shadow-lg shadow-cyan-500/25 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>Book This Plot (Token Advance)</span>
+                    </button>
+                  ) : (() => {
+                    const cName = (currentUser.name || '').trim().toLowerCase();
+                    const cEmail = (currentUser.email || '').trim().toLowerCase();
+                    const cPhone = (currentUser.phone || '').trim().toLowerCase();
+                    const pName = (plot.customer_name || '').trim().toLowerCase();
+                    const pPhone = (plot.customer_phone || '').trim().toLowerCase();
+
+                    const isMine =
+                      plot.status === 'booked' &&
+                      pName.length > 0 &&
+                      (
+                        pName === cName ||
+                        pName === cEmail ||
+                        (cEmail.length > 0 && cEmail.includes('@') && pName === cEmail.split('@')[0]) ||
+                        (pPhone.length >= 8 && cPhone.length >= 8 && pPhone === cPhone)
+                      );
+
+                    if (isMine) {
+                      return (
+                        <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs space-y-2.5 shadow-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5 font-extrabold text-sm text-emerald-400">
+                              <CheckCircle2 className="w-4.5 h-4.5" />
+                              <span>Your Reserved Plot</span>
+                            </div>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold uppercase">
+                              Hold Active
+                            </span>
+                          </div>
+
+                          <p className="text-[11px] text-slate-300 leading-relaxed">
+                            Token advance received. 48-hr priority hold is active under your account ({currentUser.name}).
+                          </p>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Are you sure you want to cancel your reservation for Plot ${plot.plot_number}?`)) {
+                                onStatusChange(plot.id, 'available', 'Reservation cancelled by client', '', '');
+                              }
+                            }}
+                            className="w-full py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>Cancel Reservation</span>
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="p-3 rounded-xl bg-slate-900 border border-amber-500/30 text-xs text-center space-y-1">
+                        <span className="font-bold text-amber-400 block flex items-center justify-center gap-1">
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Plot Currently Reserved (Booked)</span>
+                        </span>
+                        <span className="text-[11px] text-slate-400 block">
+                          This plot is reserved by another buyer ({plot.customer_name || 'Booked'}). You cannot book it again.
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
 
             {/* Core Metrics Grid */}
@@ -153,8 +342,8 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
 
               <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
                 <span className="text-slate-400 font-semibold flex items-center gap-1">
-                  <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                  Plot Price
+                  <span className="text-emerald-400 font-bold text-sm leading-none">₹</span>
+                  Plot Price (INR)
                 </span>
                 <span className="text-base font-bold text-emerald-400 block">{formatPrice(plot.price)}</span>
               </div>
@@ -180,24 +369,26 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
 
             {/* Customer Details Section (if booked or sold) */}
             {plot.status !== 'available' && (
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                     <UserCheck className="w-4 h-4 text-indigo-400" />
                     Customer & Allotment Info
                   </h4>
-                  <button
-                    onClick={() => {
-                      setTargetStatus(plot.status);
-                      setCustomerName(plot.customer_name || '');
-                      setCustomerPhone(plot.customer_phone || '');
-                      setShowStatusModal(true);
-                    }}
-                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
-                  >
-                    <Edit3 className="w-3 h-3" />
-                    <span>Edit Allottee</span>
-                  </button>
+                  {currentUser.role === 'admin' && (
+                    <button
+                      onClick={() => {
+                        setTargetStatus(plot.status);
+                        setCustomerName(plot.customer_name || '');
+                        setCustomerPhone(plot.customer_phone || '');
+                        setShowStatusModal(true);
+                      }}
+                      className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                    >
+                      <Edit3 className="w-3 h-3" />
+                      <span>Edit Allottee</span>
+                    </button>
+                  )}
                 </div>
 
                 <div className="space-y-2 text-xs">
@@ -207,14 +398,37 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
                       {plot.customer_name ? (
                         <span className="text-emerald-400 font-bold">{plot.customer_name}</span>
                       ) : (
-                        <span className="text-amber-400 italic">Not Specified (Click Edit)</span>
+                        <span className="text-amber-400 italic">Not Specified</span>
                       )}
                     </span>
                   </div>
+
                   <div className="flex justify-between py-1 border-b border-slate-900">
                     <span className="text-slate-400">Contact Number</span>
                     <span className="text-slate-200 font-mono">{plot.customer_phone || 'N/A'}</span>
                   </div>
+
+                  {plot.deed_number && (
+                    <div className="flex justify-between py-1 border-b border-slate-900">
+                      <span className="text-slate-400">Sale Deed Registration #</span>
+                      <span className="text-rose-400 font-mono font-bold">{plot.deed_number}</span>
+                    </div>
+                  )}
+
+                  {plot.payment_ref && (
+                    <div className="flex justify-between py-1 border-b border-slate-900">
+                      <span className="text-slate-400">Token Payment Ref #</span>
+                      <span className="text-cyan-300 font-mono font-bold">{plot.payment_ref}</span>
+                    </div>
+                  )}
+
+                  {plot.token_amount && plot.token_amount > 0 && (
+                    <div className="flex justify-between py-1 border-b border-slate-900">
+                      <span className="text-slate-400">Token Advance Paid</span>
+                      <span className="text-emerald-400 font-bold">₹{plot.token_amount.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+
                   {plot.booking_date && (
                     <div className="flex justify-between py-1">
                       <span className="text-slate-400">Booking Date</span>
@@ -257,9 +471,8 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
 
                     <p className="text-slate-400 text-[11px] leading-relaxed">{item.notes}</p>
 
-                    <div className="pt-1 text-[10px] text-slate-500 flex items-center gap-1">
-                      <span>Changed by:</span>
-                      <span className="text-slate-300 font-semibold">{item.changed_by}</span>
+                    <div className="pt-1 flex items-center justify-between text-[10px] text-slate-500">
+                      <span>By: {item.changed_by}</span>
                     </div>
                   </div>
                 </div>
@@ -269,43 +482,72 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
         )}
       </div>
 
-      {/* Drawer Footer Actions */}
-      <div className="p-4 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between gap-2">
-        {onSplitClick && (
-          <button
-            onClick={() => onSplitClick(plot)}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-bold transition-all"
-          >
-            <span>Subdivide Block</span>
-          </button>
-        )}
+      {/* Admin Quick Action Footer */}
+      {currentUser.role === 'admin' && (
+        <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between gap-2">
+          {onSplitClick && (
+            <button
+              onClick={() => onSplitClick(plot)}
+              className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-semibold transition-all flex items-center gap-1.5"
+            >
+              <span>Subdivide Block</span>
+            </button>
+          )}
 
-        <button
-          onClick={() => onEditClick(plot)}
-          className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all"
-        >
-          <Edit3 className="w-3.5 h-3.5" />
-          <span>Edit Details</span>
-        </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onEditClick(plot)}
+              className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-semibold transition-all flex items-center gap-1.5"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Edit Details</span>
+            </button>
 
-        <button
-          onClick={() => onDeleteClick(plot.id)}
-          className="p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs transition-all"
-          title="Delete Plot"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
+            <button
+              onClick={() => onDeleteClick(plot.id)}
+              className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all"
+              title="Delete plot"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
-      {/* Status Change Modal */}
+      {/* Broker Action Modal */}
+      <BrokerPlotActionModal
+        isOpen={isBrokerModalOpen}
+        plot={plot}
+        activeBroker={currentUser}
+        targetAction={brokerTargetAction}
+        onClose={() => setIsBrokerModalOpen(false)}
+        onConfirm={handleBrokerConfirm}
+      />
+
+      {/* Client Direct Booking Modal */}
+      <ClientPlotBookingModal
+        isOpen={isClientBookingModalOpen}
+        plot={plot}
+        activeClient={currentUser}
+        assignedBroker={assignedBroker}
+        onClose={() => setIsClientBookingModalOpen(false)}
+        onConfirmBooking={handleClientConfirmBooking}
+      />
+
+      {/* Admin Status Change Modal */}
       {showStatusModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
-            <h3 className="text-base font-bold text-white">Update Status for Plot {plot.plot_number}</h3>
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-extrabold text-white">Change Status for Plot {plot.plot_number}</h3>
+              <button onClick={() => setShowStatusModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
             <form onSubmit={handleApplyStatusChange} className="space-y-4 text-xs">
-              <div className="space-y-1.5">
-                <label className="text-slate-300 font-semibold block">Select New Status</label>
+              <div className="space-y-1">
+                <label className="text-slate-300 font-semibold block">Target Availability</label>
                 <div className="grid grid-cols-3 gap-2">
                   {(['available', 'booked', 'sold'] as PlotStatus[]).map((st) => (
                     <button
@@ -333,7 +575,7 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
                       required
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="e.g. Dr. Vikram Mehta"
+                      placeholder="e.g. Mr. Rajesh Sharma"
                       className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500"
                     />
                   </div>
