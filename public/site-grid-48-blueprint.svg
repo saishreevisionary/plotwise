@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 964" width="1200" height="964" style="background-color: #0b1329;">
+  <defs>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M 24 0 L 0 0 0 24" fill="none" stroke="#1e293b" stroke-width="0.8" opacity="0.6"/>
+    </pattern>
+    <pattern id="majorGrid" width="120" height="120" patternUnits="userSpaceOnUse">
+      <rect width="120" height="120" fill="url(#grid)" />
+      <path d="M 120 0 L 0 0 0 120" fill="none" stroke="#334155" stroke-width="1.2" opacity="0.8"/>
+    </pattern>
+  </defs>
+
+  <!-- Background Grid -->
+  <rect width="1200" height="964" fill="url(#majorGrid)" />
+
+  <!-- Outer Blueprint Layout Border -->
+  <rect x="105" y="100" width="990" height="764" fill="none" stroke="#38bdf8" stroke-width="2.5" opacity="0.9" />
+
+  <!-- Outer Perimeter Road Lines -->
+  <!-- Top 30ft Road -->
+  <rect x="105" y="20" width="990" height="70" fill="#0f172a" stroke="#475569" stroke-width="1.5" opacity="0.8" />
+  <text x="600" y="55" fill="#38bdf8" font-family="monospace" font-size="14" font-weight="bold" text-anchor="middle">30 ft Road (North)</text>
+
+  <!-- Bottom 30ft Road -->
+  <rect x="105" y="874" width="990" height="70" fill="#0f172a" stroke="#475569" stroke-width="1.5" opacity="0.8" />
+  <text x="600" y="915" fill="#38bdf8" font-family="monospace" font-size="14" font-weight="bold" text-anchor="middle">30 ft Road (South)</text>
+
+  <!-- Central 40ft Road -->
+  <rect x="105" y="442" width="990" height="80" fill="#0f172a" stroke="#475569" stroke-width="2" />
+  <line x1="105" y1="482" x2="1095" y2="482" stroke="#facc15" stroke-width="2" stroke-dasharray="10 8" />
+  <rect x="535" y="467" width="130" height="30" rx="4" fill="#0284c7" stroke="#38bdf8" stroke-width="1" />
+  <text x="600" y="487" fill="#ffffff" font-family="sans-serif" font-size="13" font-weight="bold" text-anchor="middle">40 ft Road</text>
+
+  <!-- Vertical 30ft Access Roads -->
+  <!-- Road 1 -->
+  <rect x="303" y="100" width="60" height="764" fill="#0f172a" stroke="#475569" stroke-width="1.5" />
+  <line x1="333" y1="100" x2="333" y2="864" stroke="#facc15" stroke-width="1.5" stroke-dasharray="8 6" />
+  <text x="333" y="270" fill="#cbd5e1" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle" transform="rotate(-90 333 270)">30 ft Road</text>
+  <text x="333" y="680" fill="#cbd5e1" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle" transform="rotate(-90 333 680)">30 ft Road</text>
+
+  <!-- Road 2 (Center) -->
+  <rect x="570" y="100" width="60" height="764" fill="#0f172a" stroke="#475569" stroke-width="1.5" />
+  <line x1="600" y1="100" x2="600" y2="864" stroke="#facc15" stroke-width="1.5" stroke-dasharray="8 6" />
+  <text x="600" y="270" fill="#cbd5e1" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle" transform="rotate(-90 600 270)">30 ft Road</text>
+  <text x="600" y="680" fill="#cbd5e1" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle" transform="rotate(-90 600 680)">30 ft Road</text>
+
+  <!-- Road 3 -->
+  <rect x="837" y="100" width="60" height="764" fill="#0f172a" stroke="#475569" stroke-width="1.5" />
+  <line x1="867" y1="100" x2="867" y2="864" stroke="#facc15" stroke-width="1.5" stroke-dasharray="8 6" />
+  <text x="867" y="270" fill="#cbd5e1" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle" transform="rotate(-90 867 270)">30 ft Road</text>
+  <text x="867" y="680" fill="#cbd5e1" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle" transform="rotate(-90 867 680)">30 ft Road</text>
+
+  <!-- Plot Grid Columns (Clean Blueprint Lines) -->
+  <!-- Top Block Plots 01 to 24 (4 Columns of 6 plots) -->
+  <!-- Col 1: 105 to 303 (W: 198) -->
+  <!-- Col 2: 363 to 570 (W: 207) -->
+  <!-- Col 3: 630 to 837 (W: 207) -->
+  <!-- Col 4: 897 to 1095 (W: 198) -->
+
+  <!-- Top Rows H: 57px each (100 to 442) -->
+  <!-- Plot outlines are rendered dynamically by InteractiveLayoutMap overlay -->
+
+  <!-- Red CAD Dimension Lines -->
+  <!-- Top Width 249'-0" -->
+  <g stroke="#f43f5e" stroke-width="1.5" fill="#f43f5e" font-family="monospace" font-size="12" font-weight="bold">
+    <line x1="105" y1="85" x2="1095" y2="85" />
+    <polygon points="105,85 113,81 113,89" />
+    <polygon points="1095,85 1087,81 1087,89" />
+    <rect x="550" y="73" width="100" height="22" rx="4" fill="#0f172a" stroke="#f43f5e" stroke-width="1" />
+    <text x="600" y="89" fill="#f43f5e" text-anchor="middle">249'-0"</text>
+
+    <!-- Bottom Width 249'-0" -->
+    <line x1="105" y1="889" x2="1095" y2="889" />
+    <polygon points="105,889 113,885 113,893" />
+    <polygon points="1095,889 1087,885 1087,893" />
+    <rect x="550" y="877" width="100" height="22" rx="4" fill="#0f172a" stroke="#f43f5e" stroke-width="1" />
+    <text x="600" y="893" fill="#f43f5e" text-anchor="middle">249'-0"</text>
+
+    <!-- Left Height 200'-0" -->
+    <line x1="85" y1="100" x2="85" y2="864" />
+    <polygon points="85,100 81,108 89,108" />
+    <polygon points="85,864 81,856 89,856" />
+    <rect x="35" y="471" width="90" height="22" rx="4" fill="#0f172a" stroke="#f43f5e" stroke-width="1" />
+    <text x="80" y="487" fill="#f43f5e" text-anchor="middle">200'-0"</text>
+
+    <!-- Right Height 200'-0" -->
+    <line x1="1115" y1="100" x2="1115" y2="864" />
+    <polygon points="1115,100 1111,108 1119,108" />
+    <polygon points="1115,864 1111,856 1119,856" />
+    <rect x="1075" y="471" width="90" height="22" rx="4" fill="#0f172a" stroke="#f43f5e" stroke-width="1" />
+    <text x="1120" y="487" fill="#f43f5e" text-anchor="middle">200'-0"</text>
+  </g>
+
+  <!-- Compass Rose -->
+  <g transform="translate(60, 50)">
+    <circle cx="0" cy="0" r="18" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" />
+    <path d="M 0 -14 L 4 0 L 0 -4 L -4 0 Z" fill="#38bdf8" />
+    <path d="M 0 14 L 4 0 L 0 4 L -4 0 Z" fill="#64748b" />
+    <text x="0" y="-22" fill="#38bdf8" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">N</text>
+  </g>
+</svg>
