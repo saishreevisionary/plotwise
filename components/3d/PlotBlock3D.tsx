@@ -14,6 +14,7 @@ interface PlotBlock3DProps {
   onSelectPlot: (plot: Plot) => void;
   extrudeHeight?: number;
   showVilla?: boolean;
+  isWalkMode?: boolean;
 }
 
 export const PlotBlock3D: React.FC<PlotBlock3DProps> = ({
@@ -24,8 +25,11 @@ export const PlotBlock3D: React.FC<PlotBlock3DProps> = ({
   onSelectPlot,
   extrudeHeight = 0.6,
   showVilla = true,
+  isWalkMode = false,
 }) => {
   const [hovered, setHovered] = useState(false);
+  // Suppress hovered state entirely in walk mode to avoid false triggers
+  const effectiveHovered = isWalkMode ? false : hovered;
 
   // Convert 2D image coordinates to 3D Three.js coordinates
   const worldScaleX = 40 / layoutWidth;
@@ -51,7 +55,7 @@ export const PlotBlock3D: React.FC<PlotBlock3DProps> = ({
 
     shape.closePath();
 
-    const currentExtrudeHeight = isSelected ? extrudeHeight * 1.6 : hovered ? extrudeHeight * 1.25 : extrudeHeight;
+    const currentExtrudeHeight = isSelected ? extrudeHeight * 1.6 : effectiveHovered ? extrudeHeight * 1.25 : extrudeHeight;
 
     const extrudeSettings: THREE.ExtrudeGeometryOptions = {
       depth: currentExtrudeHeight,
@@ -65,7 +69,7 @@ export const PlotBlock3D: React.FC<PlotBlock3DProps> = ({
     const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
     geom.rotateX(-Math.PI / 2);
     return geom;
-  }, [plot.polygon_coordinates, layoutWidth, layoutHeight, extrudeHeight, isSelected, hovered]);
+  }, [plot.polygon_coordinates, layoutWidth, layoutHeight, extrudeHeight, isSelected, effectiveHovered]);
 
   // Center coordinate for label tooltip and villa position
   const centerPos = useMemo(() => {
@@ -91,7 +95,7 @@ export const PlotBlock3D: React.FC<PlotBlock3DProps> = ({
   // Status Material colors
   const materialColor = useMemo(() => {
     if (isSelected) return '#22d3ee';
-    if (hovered) return '#67e8f9';
+    if (effectiveHovered) return '#67e8f9';
 
     switch (plot.status) {
       case 'available':
@@ -103,7 +107,7 @@ export const PlotBlock3D: React.FC<PlotBlock3DProps> = ({
       default:
         return '#64748b';
     }
-  }, [plot.status, isSelected, hovered]);
+  }, [plot.status, isSelected, effectiveHovered]);
 
   if (!geometry) return null;
 
@@ -111,34 +115,38 @@ export const PlotBlock3D: React.FC<PlotBlock3DProps> = ({
 
   return (
     <group
-      position={[0, hovered ? 0.15 : 0, 0]}
+      position={[0, effectiveHovered ? 0.15 : 0, 0]}
       onClick={(e) => {
         e.stopPropagation();
         onSelectPlot(plot);
       }}
       onPointerOver={(e) => {
+        if (isWalkMode) return;
         e.stopPropagation();
         setHovered(true);
       }}
-      onPointerOut={() => setHovered(false)}
+      onPointerOut={() => {
+        if (isWalkMode) return;
+        setHovered(false);
+      }}
     >
       {/* Extruded 3D Glassmorphic Land Mesh (Semi-transparent) */}
       <mesh geometry={geometry} castShadow receiveShadow>
         <meshStandardMaterial
           color={materialColor}
           transparent={true}
-          opacity={isSelected ? 0.75 : hovered ? 0.65 : 0.5}
+          opacity={isSelected ? 0.75 : effectiveHovered ? 0.65 : 0.5}
           roughness={0.2}
           metalness={0.3}
-          emissive={isSelected ? materialColor : hovered ? materialColor : '#000000'}
-          emissiveIntensity={isSelected ? 0.5 : hovered ? 0.3 : 0}
+          emissive={isSelected ? materialColor : effectiveHovered ? materialColor : '#000000'}
+          emissiveIntensity={isSelected ? 0.5 : effectiveHovered ? 0.3 : 0}
         />
       </mesh>
 
       {/* Wireframe Outline for crisp architectural boundary */}
       <lineSegments position={[0, 0.01, 0]}>
         <edgesGeometry args={[geometry]} />
-        <lineBasicMaterial color={isSelected ? '#22d3ee' : hovered ? '#ffffff' : '#1e293b'} linewidth={2} />
+        <lineBasicMaterial color={isSelected ? '#22d3ee' : effectiveHovered ? '#ffffff' : '#1e293b'} linewidth={2} />
       </lineSegments>
 
       {/* Corner Boundary Posts */}
@@ -158,7 +166,7 @@ export const PlotBlock3D: React.FC<PlotBlock3DProps> = ({
           className={`px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-wider pointer-events-none transition-all shadow-xl whitespace-nowrap flex flex-col items-center gap-0.5 ${
             isSelected
               ? 'bg-cyan-400 text-slate-950 scale-110 font-extrabold ring-2 ring-cyan-300'
-              : hovered
+              : effectiveHovered
               ? 'bg-white text-slate-950 scale-105'
               : 'bg-slate-950/90 text-slate-100 border border-slate-700'
           }`}
