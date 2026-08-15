@@ -110,7 +110,11 @@ export default function InteractiveMapPage({
   };
 
   useEffect(() => {
-    loadData();
+    const sync = async () => {
+      await AppState.syncFromSupabase();
+      loadData();
+    };
+    sync();
   }, [projectId, layoutId]);
 
   // Load history whenever selected plot changes

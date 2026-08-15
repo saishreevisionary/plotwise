@@ -2,24 +2,9 @@
 
 import { Project, Layout, Plot, Road, PlotStatusHistory, PlotStatus, PolygonPoint } from '@/types';
 import { LayoutAnalyzerService } from '@/lib/ai/layout-analyzer';
-import {
-  DEMO_PROJECT,
-  DEMO_LAYOUT,
-  DEMO_PLOTS,
-  DEMO_ROADS,
-  DEMO_PLOT_HISTORY,
-  BASIC_DEMO_PROJECT,
-  BASIC_DEMO_LAYOUT,
-  BASIC_DEMO_PLOTS,
-  BASIC_DEMO_ROADS,
-  DEMO_PROJECT_ID,
-  DEMO_LAYOUT_ID,
-  BASIC_DEMO_PROJECT_ID,
-  BASIC_DEMO_LAYOUT_ID,
-} from './demo-data';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
-const STORAGE_KEY = 'plotwise_ai_app_data_v2';
+const STORAGE_KEY = 'plotwise_ai_app_data_v4';
 
 interface AppStoreData {
   projects: Project[];
@@ -30,81 +15,35 @@ interface AppStoreData {
 }
 
 function getInitialData(): AppStoreData {
-  const defaultInitial: AppStoreData = {
-    projects: [BASIC_DEMO_PROJECT, DEMO_PROJECT],
-    layouts: [BASIC_DEMO_LAYOUT, DEMO_LAYOUT],
-    plots: [...BASIC_DEMO_PLOTS, ...DEMO_PLOTS],
-    roads: [...BASIC_DEMO_ROADS, ...DEMO_ROADS],
-    history: DEMO_PLOT_HISTORY,
+  const emptyInitial: AppStoreData = {
+    projects: [],
+    layouts: [],
+    plots: [],
+    roads: [],
+    history: [],
   };
 
   if (typeof window === 'undefined') {
-    return defaultInitial;
+    return emptyInitial;
   }
 
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-
-      const projects = Array.isArray(parsed.projects) ? parsed.projects : [];
-      const layouts = Array.isArray(parsed.layouts) ? parsed.layouts : [];
-      const plots = Array.isArray(parsed.plots) ? parsed.plots : [];
-      const roads = Array.isArray(parsed.roads) ? parsed.roads : [];
-      const history = Array.isArray(parsed.history) ? parsed.history : [];
-
-      let modified = false;
-
-      // Ensure BASIC_DEMO_PROJECT exists
-      if (!projects.some((p: Project) => p.id === BASIC_DEMO_PROJECT.id)) {
-        projects.unshift(BASIC_DEMO_PROJECT);
-        layouts.unshift(BASIC_DEMO_LAYOUT);
-        plots.unshift(...BASIC_DEMO_PLOTS);
-        roads.unshift(...BASIC_DEMO_ROADS);
-        modified = true;
-      }
-
-      // Ensure DEMO_PROJECT (Green Valley) exists and has clean 69-plot blueprint data
-      const gvIndex = projects.findIndex((p: Project) => p.id === DEMO_PROJECT.id);
-      if (gvIndex === -1) {
-        projects.push(DEMO_PROJECT);
-        layouts.push(DEMO_LAYOUT);
-        plots.push(...DEMO_PLOTS);
-        roads.push(...DEMO_ROADS);
-        history.push(...DEMO_PLOT_HISTORY);
-        modified = true;
-      } else {
-        // If Green Valley layout has corrupted 100+ contour plots, heal it back to exact 69 blueprint plots
-        const gvPlotsCount = plots.filter((p: Plot) => p.layout_id === DEMO_LAYOUT_ID).length;
-        if (gvPlotsCount === 0 || gvPlotsCount > 80) {
-          const nonGvPlots = plots.filter((p: Plot) => p.layout_id !== DEMO_LAYOUT_ID);
-          plots.length = 0;
-          plots.push(...nonGvPlots, ...DEMO_PLOTS);
-
-          const nonGvRoads = roads.filter((r: Road) => r.layout_id !== DEMO_LAYOUT_ID);
-          roads.length = 0;
-          roads.push(...nonGvRoads, ...DEMO_ROADS);
-          modified = true;
-        }
-      }
-
-      const storeData: AppStoreData = { projects, layouts, plots, roads, history };
-      if (modified) {
-        saveData(storeData);
-      }
-      return storeData;
+      return {
+        projects: Array.isArray(parsed.projects) ? parsed.projects : [],
+        layouts: Array.isArray(parsed.layouts) ? parsed.layouts : [],
+        plots: Array.isArray(parsed.plots) ? parsed.plots : [],
+        roads: Array.isArray(parsed.roads) ? parsed.roads : [],
+        history: Array.isArray(parsed.history) ? parsed.history : [],
+      };
     }
   } catch (err) {
-    console.error('Failed to load local store, resetting to initial defaults:', err);
+    console.error('Failed to load store from localStorage:', err);
   }
 
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultInitial));
-  } catch (e) {
-    console.error('Failed to write initial store:', e);
-  }
-
-  return defaultInitial;
+  return emptyInitial;
 }
 
 function saveData(data: AppStoreData) {
@@ -123,24 +62,36 @@ export class AppState {
   }
 
   /**
-   * Optional background sync with Supabase PostgreSQL
+   * Comprehensive Supabase Cloud Synchronization
    */
   public static async syncFromSupabase() {
     if (!isSupabaseConfigured()) return;
     try {
       const supabase = createClient();
-      const { data: dbProjects } = await supabase.from('projects').select('*');
-      if (dbProjects && dbProjects.length > 0) {
-        const store = this.getStore();
-        dbProjects.forEach((dbp: any) => {
-          if (!store.projects.some((p) => p.id === dbp.id)) {
-            store.projects.push(dbp);
-          }
-        });
-        saveData(store);
+      const store = this.getStore();
+
+      // 1. Fetch Projects
+      const { data: dbProjects, error: pErr } = await supabase.from('projects').select('*');
+      if (!pErr && dbProjects) {
+        store.projects = dbProjects;
       }
+
+      // 2. Fetch Layouts
+      const { data: dbLayouts, error: lErr } = await supabase.from('layouts').select('*');
+      if (!lErr && dbLayouts) {
+        store.layouts = dbLayouts;
+      }
+
+      // 3. Fetch Plots
+      const { data: dbPlots, error: plErr } = await supabase.from('plots').select('*');
+      if (!plErr && dbPlots) {
+        store.plots = dbPlots;
+      }
+
+      saveData(store);
+      console.log('[Supabase Cloud Sync] Clean store updated from Supabase database.');
     } catch (err) {
-      console.warn('Supabase sync skipped, continuing with local store:', err);
+      console.warn('Supabase cloud sync warning:', err);
     }
   }
 
@@ -151,10 +102,6 @@ export class AppState {
       const validProjects = (store.projects || []).filter((p): p is Project => Boolean(p && p.id));
       const validPlots = (store.plots || []).filter((pl) => Boolean(pl && pl.id));
       const validLayouts = (store.layouts || []).filter((l) => Boolean(l && l.id));
-
-      if (validProjects.length === 0) {
-        return [BASIC_DEMO_PROJECT, DEMO_PROJECT];
-      }
 
       return validProjects.map((p) => {
         const projectPlots = validPlots.filter((pl) => {
@@ -178,7 +125,7 @@ export class AppState {
       });
     } catch (err) {
       console.error('Error getting projects from store:', err);
-      return [BASIC_DEMO_PROJECT, DEMO_PROJECT];
+      return [];
     }
   }
 
@@ -187,8 +134,6 @@ export class AppState {
       return this.getProjects().find((p) => p && p.id === id);
     } catch (err) {
       console.error(`Error getting project ${id}:`, err);
-      if (id === BASIC_DEMO_PROJECT.id) return BASIC_DEMO_PROJECT;
-      if (id === DEMO_PROJECT.id) return DEMO_PROJECT;
       return undefined;
     }
   }
@@ -200,7 +145,7 @@ export class AppState {
       name: data.name,
       location: data.location,
       description: data.description,
-      created_by: 'Authorized Developer',
+      created_by: 'usr-admin-1',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       layout_count: 0,
@@ -222,11 +167,16 @@ export class AppState {
           name: newProject.name,
           location: newProject.location,
           description: newProject.description,
-          created_by: newProject.created_by,
+          created_by: 'usr-admin-1',
         })
         .then(
-          () => console.log('Project synced to Supabase PostgreSQL'),
-          (err: any) => console.warn('Supabase sync warning:', err)
+          ({ error }) => {
+            if (error) {
+              console.error('[Supabase Error] Projects insert failed:', error.message, error.details);
+            } else {
+              console.log('[Supabase Sync] New Project synced to Supabase projects table successfully!');
+            }
+          }
         );
     }
 
@@ -280,11 +230,10 @@ export class AppState {
           original_width: newLayout.original_width,
           original_height: newLayout.original_height,
           processing_status: newLayout.processing_status,
-          ai_model: newLayout.ai_model,
         })
         .then(
-          () => console.log('Layout synced to Supabase'),
-          (err: any) => console.warn('Supabase sync warning:', err)
+          () => console.log('[Supabase Sync] Layout synced to Supabase layouts table.'),
+          (err: any) => console.warn('Supabase layout sync warning:', err)
         );
     }
 
@@ -303,7 +252,7 @@ export class AppState {
       if (isSupabaseConfigured()) {
         createClient()
           .from('layouts')
-          .update({ processing_status: status, processing_error: error })
+          .update({ processing_status: status })
           .eq('id', layoutId)
           .then(
             () => {},
@@ -317,12 +266,7 @@ export class AppState {
   static getPlotsByLayoutId(layoutId: string): Plot[] {
     try {
       const store = this.getStore();
-      const plots = (store.plots || []).filter((p) => Boolean(p && p.layout_id === layoutId));
-      if (plots.length === 0) {
-        if (layoutId === BASIC_DEMO_LAYOUT_ID) return BASIC_DEMO_PLOTS;
-        if (layoutId === DEMO_LAYOUT_ID) return DEMO_PLOTS;
-      }
-      return plots;
+      return (store.plots || []).filter((p) => Boolean(p && p.layout_id === layoutId));
     } catch (err) {
       console.error(`Error getting plots for layout ${layoutId}:`, err);
       return [];
@@ -353,9 +297,17 @@ export class AppState {
 
     const oldStatus = plot.status;
     plot.status = newStatus;
-    if (customerName) plot.customer_name = customerName;
-    if (customerPhone) plot.customer_phone = customerPhone;
-    if (newStatus !== 'available') plot.booking_date = new Date().toISOString();
+
+    if (customerName !== undefined) plot.customer_name = customerName;
+    if (customerPhone !== undefined) plot.customer_phone = customerPhone;
+
+    if (newStatus === 'available') {
+      if (!customerName) plot.customer_name = undefined;
+      if (!customerPhone) plot.customer_phone = undefined;
+      plot.booking_date = undefined;
+    } else {
+      if (!plot.booking_date) plot.booking_date = new Date().toISOString();
+    }
     plot.updated_at = new Date().toISOString();
 
     const historyEntry: PlotStatusHistory = {
@@ -377,14 +329,16 @@ export class AppState {
         .from('plots')
         .update({
           status: newStatus,
-          customer_name: plot.customer_name,
-          customer_phone: plot.customer_phone,
-          booking_date: plot.booking_date,
+          customer_name: plot.customer_name || null,
+          customer_phone: plot.customer_phone || null,
+          booking_date: plot.booking_date || null,
         })
         .eq('id', plotId)
         .then(
-          () => {},
-          () => {}
+          ({ error }) => {
+            if (error) console.warn('[Supabase Warning] Plot status update failed:', error.message);
+            else console.log('[Supabase Sync] Plot status & allotment info synced to Supabase.');
+          }
         );
 
       supabase
@@ -480,8 +434,8 @@ export class AppState {
           ai_detected: newPlot.ai_detected,
         })
         .then(
-          () => {},
-          () => {}
+          () => console.log('[Supabase Sync] Plot inserted to Supabase plots table.'),
+          (err: any) => console.warn('Supabase plot sync error:', err)
         );
     }
 
@@ -575,7 +529,7 @@ export class AppState {
 
     // Delete target block plot & push new small plots
     this.deletePlot(plotId);
-    newPlots.forEach((np) => store.plots.push(np));
+    newPlots.forEach((np) => this.addPlot(np));
     saveData(store);
 
     return newPlots;
@@ -614,7 +568,7 @@ export class AppState {
       area: p.area,
       price: p.price || p.area * 2500,
       facing: p.facing,
-      status: idx % 6 === 0 ? 'booked' : idx % 9 === 0 ? 'sold' : 'available',
+      status: 'available',
       polygon_coordinates: p.polygon,
       ai_confidence: p.confidence,
       ai_detected: true,
@@ -642,5 +596,11 @@ export class AppState {
       localStorage.removeItem(STORAGE_KEY);
     }
     return this.getProjects();
+  }
+
+  static resetStore() {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEY);
+    }
   }
 }

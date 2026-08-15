@@ -26,7 +26,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setIsMounted(true);
-    loadProjects();
+    const syncAll = async () => {
+      await AuthStore.syncFromSupabase();
+      await AppState.syncFromSupabase();
+      loadProjects();
+    };
+    syncAll();
   }, []);
 
   const handleCreateProject = (data: { name: string; location: string; description: string }) => {
@@ -72,11 +77,34 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {projects.map((proj) => (
-                <ProjectCard key={proj.id} project={proj} />
-              ))}
-            </div>
+            {projects.length === 0 ? (
+              <div className="p-10 rounded-3xl bg-slate-900 border border-slate-800 border-dashed text-center space-y-4 shadow-xl">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center justify-center mx-auto">
+                  <Building2 className="w-7 h-7" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-white text-base">No Real Estate Projects Yet</h3>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+                    Your Supabase database table 'projects' is empty. Click '+ New Project' to create your first site project and upload blueprint layout files.
+                  </p>
+                </div>
+                {currentUser.role === 'admin' && (
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/30 transition-all inline-flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create First Project</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {projects.map((proj) => (
+                  <ProjectCard key={proj.id} project={proj} />
+                ))}
+              </div>
+            )}
           </div>
         </main>
       </div>

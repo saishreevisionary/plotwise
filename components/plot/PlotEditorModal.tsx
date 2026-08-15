@@ -24,6 +24,8 @@ export const PlotEditorModal: React.FC<PlotEditorModalProps> = ({
   const [price, setPrice] = useState<number>(1800000);
   const [facing, setFacing] = useState<FacingDirection>('East');
   const [status, setStatus] = useState<PlotStatus>('available');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
 
   useEffect(() => {
     if (plot) {
@@ -32,12 +34,16 @@ export const PlotEditorModal: React.FC<PlotEditorModalProps> = ({
       setPrice(plot.price);
       setFacing(plot.facing);
       setStatus(plot.status);
+      setCustomerName(plot.customer_name || '');
+      setCustomerPhone(plot.customer_phone || '');
     } else {
       setPlotNumber('A-41');
       setArea(1500);
       setPrice(2250000);
       setFacing('East');
       setStatus('available');
+      setCustomerName('');
+      setCustomerPhone('');
     }
   }, [plot, isOpen]);
 
@@ -51,6 +57,8 @@ export const PlotEditorModal: React.FC<PlotEditorModalProps> = ({
       price: Number(price),
       facing,
       status,
+      customer_name: customerName || undefined,
+      customer_phone: customerPhone || undefined,
     });
     onClose();
   };
@@ -152,6 +160,32 @@ export const PlotEditorModal: React.FC<PlotEditorModalProps> = ({
               ))}
             </div>
           </div>
+
+          {status !== 'available' && (
+            <div className="space-y-3 pt-1 border-t border-slate-800/60">
+              <div className="space-y-1">
+                <label className="text-slate-300 font-semibold block">Allottee / Customer Full Name</label>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="e.g. Dr. Vikram Mehta"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-slate-300 font-semibold block">Contact Phone Number</label>
+                <input
+                  type="tel"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
             <button

@@ -123,7 +123,9 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
               </div>
               <button
                 onClick={() => {
-                  setTargetStatus(plot.status === 'available' ? 'booked' : plot.status === 'booked' ? 'sold' : 'available');
+                  setTargetStatus(plot.status === 'available' ? 'booked' : plot.status);
+                  setCustomerName(plot.customer_name || '');
+                  setCustomerPhone(plot.customer_phone || '');
                   setShowStatusModal(true);
                 }}
                 className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all shadow-md"
@@ -179,15 +181,35 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
             {/* Customer Details Section (if booked or sold) */}
             {plot.status !== 'available' && (
               <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
-                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <UserCheck className="w-4 h-4 text-indigo-400" />
-                  Customer & Allotment Info
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4 text-indigo-400" />
+                    Customer & Allotment Info
+                  </h4>
+                  <button
+                    onClick={() => {
+                      setTargetStatus(plot.status);
+                      setCustomerName(plot.customer_name || '');
+                      setCustomerPhone(plot.customer_phone || '');
+                      setShowStatusModal(true);
+                    }}
+                    className="text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    <span>Edit Allottee</span>
+                  </button>
+                </div>
 
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between py-1 border-b border-slate-900">
                     <span className="text-slate-400">Allottee Name</span>
-                    <span className="text-white font-semibold">{plot.customer_name || 'N/A'}</span>
+                    <span className="text-white font-semibold">
+                      {plot.customer_name ? (
+                        <span className="text-emerald-400 font-bold">{plot.customer_name}</span>
+                      ) : (
+                        <span className="text-amber-400 italic">Not Specified (Click Edit)</span>
+                      )}
+                    </span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-900">
                     <span className="text-slate-400">Contact Number</span>

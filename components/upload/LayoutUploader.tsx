@@ -137,7 +137,7 @@ export const LayoutUploader: React.FC<LayoutUploaderProps> = ({
           area: p.area,
           price: p.price || p.area * 2400,
           facing: p.facing,
-          status: idx % 4 === 0 ? 'booked' : idx % 7 === 0 ? 'sold' : 'available',
+          status: 'available',
           polygon_coordinates: p.polygon,
           ai_confidence: p.confidence,
           ai_detected: true,

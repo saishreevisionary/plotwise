@@ -228,29 +228,6 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({ currentUser, onOpe
             </div>
           </div>
         </div>
-
-        {/* Featured 3D Site Twin Card */}
-        <div className="p-6 sm:p-8 rounded-3xl bg-slate-900 border border-slate-800 space-y-6 shadow-xl relative overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <span className="text-xs font-bold text-indigo-400 tracking-wider uppercase block">
-                Featured Site Layout
-              </span>
-              <h2 className="text-xl font-extrabold text-white">Green Valley Residential Estates</h2>
-              <p className="text-xs text-slate-400 mt-1">
-                48 Premium Gated Plots • 40ft Main Asphalt Road • 30ft Corridors • RERA Approved
-              </p>
-            </div>
-
-            <Link
-              href="/projects/demo-project-green-valley/layout/demo-layout-green-valley-v1"
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-400 hover:scale-105 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-2 self-start sm:self-auto"
-            >
-              <span>Explore 3D Digital Twin Map</span>
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
       </div>
     );
   }

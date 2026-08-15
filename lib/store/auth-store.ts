@@ -20,7 +20,57 @@ export const DEFAULT_ADMIN: UserProfile = {
 };
 
 export class AuthStore {
-  // Get all registered users (Starts with only DEFAULT_ADMIN until Admin registers brokers)
+  /**
+   * Synchronize Users, Broker Codes, and Plot Holds from Supabase Cloud Database
+   */
+  static async syncFromSupabase() {
+    if (!isSupabaseConfigured() || typeof window === 'undefined') return;
+    try {
+      const supabase = createClient();
+
+      // 1. Fetch Users
+      const { data: dbUsers } = await supabase.from('users').select('*');
+      if (dbUsers && dbUsers.length > 0) {
+        const localUsers = this.getAllUsers();
+        const mergedMap = new Map<string, UserProfile>();
+        localUsers.forEach((u) => mergedMap.set(u.id, u));
+        dbUsers.forEach((u: any) => {
+          mergedMap.set(u.id, {
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            password: u.password_hash || u.password || 'password123',
+            role: u.role,
+            phone: u.phone,
+            broker_code: u.broker_code,
+            agency_name: u.agency_name,
+            assigned_broker_id: u.assigned_broker_id,
+            created_by_id: u.created_by_id,
+            created_at: u.created_at,
+          });
+        });
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(Array.from(mergedMap.values())));
+      }
+
+      // 2. Fetch Broker Codes
+      const { data: dbCodes } = await supabase.from('broker_codes').select('*');
+      if (dbCodes && dbCodes.length > 0) {
+        localStorage.setItem(BROKER_CODES_STORAGE_KEY, JSON.stringify(dbCodes));
+      }
+
+      // 3. Fetch Plot Holds
+      const { data: dbHolds } = await supabase.from('plot_holds').select('*');
+      if (dbHolds && dbHolds.length > 0) {
+        localStorage.setItem(PLOT_HOLDS_STORAGE_KEY, JSON.stringify(dbHolds));
+      }
+
+      console.log('[Supabase Cloud Sync] Users, broker codes, and plot holds synced from Supabase Cloud.');
+    } catch (err) {
+      console.warn('Supabase AuthStore sync warning:', err);
+    }
+  }
+
+  // Get all registered users
   static getAllUsers(): UserProfile[] {
     if (typeof window === 'undefined') return [DEFAULT_ADMIN];
 

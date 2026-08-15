@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Box, Lock, Mail, Sparkles, ArrowRight, ShieldCheck, Key, UserCheck, Phone, Building2 } from 'lucide-react';
 import { AuthStore } from '@/lib/store/auth-store';
@@ -9,6 +9,10 @@ import { UserRole } from '@/types';
 export default function LoginPage() {
   const router = useRouter();
   const [activeRoleTab, setActiveRoleTab] = useState<UserRole>('admin');
+
+  useEffect(() => {
+    AuthStore.syncFromSupabase();
+  }, []);
 
   // Admin form state
   const [adminEmail, setAdminEmail] = useState('admin@plotwise.com');

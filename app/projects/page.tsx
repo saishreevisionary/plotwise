@@ -18,7 +18,11 @@ export default function ProjectsPage() {
   };
 
   useEffect(() => {
-    loadProjects();
+    const sync = async () => {
+      await AppState.syncFromSupabase();
+      loadProjects();
+    };
+    sync();
   }, []);
 
   const handleCreateProject = (data: { name: string; location: string; description: string }) => {
