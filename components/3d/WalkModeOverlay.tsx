@@ -176,8 +176,8 @@ export const WalkModeOverlay: React.FC<WalkModeOverlayProps> = ({
               ))}
             </div>
             <div className="border-t border-slate-700 pt-2 space-y-0.5">
-              <p className="text-slate-400 text-[9px] text-center tracking-wide">MOUSE · Look around</p>
-              <p className="text-slate-500 text-[9px] text-center">ESC · Exit</p>
+              <p className="text-slate-400 text-[9px] text-center tracking-wide">WASD · Move | SHIFT · Sprint</p>
+              <p className="text-slate-400 text-[9px] text-center tracking-wide">MOUSE · Look around | ESC · Exit</p>
             </div>
           </div>
         </div>

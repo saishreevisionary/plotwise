@@ -32,6 +32,15 @@ export const DEMO_LAYOUT: Layout = {
   original_height: 964,
   processing_status: 'completed',
   ai_model: 'Vision-OCR SiteMap Engine v3.2',
+  accuracy_mode: 'calibrated',
+  image_source_type: 'blueprint',
+  gps_anchor: {
+    lat: 12.9716,
+    lng: 77.5946,
+    zoom: 18,
+    rotation_degrees: -8,
+    meters_per_pixel: 0.16,
+  },
   created_at: new Date(Date.now() - 29 * 86400000).toISOString(),
   updated_at: new Date().toISOString(),
 };
@@ -62,6 +71,15 @@ export const BASIC_DEMO_LAYOUT: Layout = {
   original_height: 1024,
   processing_status: 'completed',
   ai_model: 'Vision-OCR Blueprint Road Detector v1.0',
+  accuracy_mode: 'calibrated',
+  image_source_type: 'blueprint',
+  gps_anchor: {
+    lat: 19.0760,
+    lng: 72.8777,
+    zoom: 19,
+    rotation_degrees: 0,
+    meters_per_pixel: 0.12,
+  },
   created_at: new Date(Date.now() - 9 * 86400000).toISOString(),
   updated_at: new Date().toISOString(),
 };

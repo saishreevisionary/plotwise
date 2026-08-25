@@ -11,6 +11,7 @@ interface PolygonEditorProps {
   onChange: (newPolygon: PolygonPoint[]) => void;
   onSave: () => void;
   onCancel: () => void;
+  onDeletePlot?: () => void;
   isAddingNew?: boolean;
 }
 
@@ -21,6 +22,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
   onChange,
   onSave,
   onCancel,
+  onDeletePlot,
   isAddingNew = false,
 }) => {
   const [activeVertex, setActiveVertex] = useState<number | null>(null);
@@ -123,7 +125,7 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-slate-900/95 backdrop-blur-md border border-cyan-500/40 rounded-xl px-4 py-2 flex items-center gap-3 shadow-2xl text-xs text-white">
         <div className="flex items-center gap-1.5 text-cyan-400 font-semibold">
           <Move className="w-4 h-4 animate-bounce" />
-          <span>{isAddingNew ? 'Click canvas to add plot corners' : 'Drag handles to fit layout line'}</span>
+          <span>{isAddingNew ? 'Click canvas to add plot corners' : 'Drag handles • Right-click vertex to delete'}</span>
         </div>
 
         <div className="h-4 w-px bg-slate-700" />
@@ -137,6 +139,18 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
           <Square className="w-3.5 h-3.5" />
           <span>Auto-Box</span>
         </button>
+
+        {onDeletePlot && !isAddingNew && (
+          <button
+            type="button"
+            onClick={onDeletePlot}
+            title="Delete this incorrect plot"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 text-rose-300 font-semibold transition-all"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete Plot</span>
+          </button>
+        )}
 
         <div className="h-4 w-px bg-slate-700" />
 
@@ -219,7 +233,14 @@ export const PolygonEditor: React.FC<PolygonEditorProps> = ({
         {polygon.map((pt, idx) => {
           const isSelected = activeVertex === idx;
           return (
-            <g key={idx} className="cursor-grab active:cursor-grabbing">
+            <g
+              key={idx}
+              className="cursor-grab active:cursor-grabbing"
+              onContextMenu={(e) => {
+                e.preventDefault();
+                handleDeleteVertex(idx, e);
+              }}
+            >
               {/* Pulse Ring */}
               <circle
                 cx={pt[0]}

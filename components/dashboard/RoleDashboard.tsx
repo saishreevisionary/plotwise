@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Sparkles,
@@ -33,9 +33,14 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({ currentUser, onOpe
   const [isBrokerModalOpen, setIsBrokerModalOpen] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
 
-  const [users, setUsers] = useState<UserProfile[]>(AuthStore.getAllUsers());
-  const [brokerCodes, setBrokerCodes] = useState<BrokerCode[]>(AuthStore.getBrokerCodes());
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [brokerCodes, setBrokerCodes] = useState<BrokerCode[]>([]);
   const holds = AuthStore.getPlotHolds();
+
+  useEffect(() => {
+    setUsers(AuthStore.getAllUsers());
+    setBrokerCodes(AuthStore.getBrokerCodes());
+  }, []);
 
   const handleRefreshUsers = () => {
     setUsers(AuthStore.getAllUsers());

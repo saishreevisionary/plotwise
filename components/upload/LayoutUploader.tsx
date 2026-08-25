@@ -1,7 +1,19 @@
 'use client';
 
 import React, { useState } from 'react';
-import { UploadCloud, File, AlertCircle, Sparkles, CheckCircle2, Cpu, Scan } from 'lucide-react';
+import {
+  UploadCloud,
+  File as FileIcon,
+  AlertCircle,
+  Sparkles,
+  CheckCircle2,
+  Cpu,
+  Scan,
+  Layers,
+  Image as ImageIcon,
+  Compass,
+  ArrowRight,
+} from 'lucide-react';
 import { ProcessingStatus } from './ProcessingStatus';
 import { LayoutAnalyzerService } from '@/lib/ai/layout-analyzer';
 import { AppState } from '@/lib/store/app-state';
@@ -12,31 +24,40 @@ interface LayoutUploaderProps {
   onCancel?: () => void;
 }
 
+export type UploadSourceMode = 'master57' | 'blueprint' | 'drone' | 'gemini' | 'dual_overlay';
+
 export const LayoutUploader: React.FC<LayoutUploaderProps> = ({
   projectId,
   onCompleted,
   onCancel,
 }) => {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [dragOver, setDragOver] = useState(false);
+  const [sourceMode, setSourceMode] = useState<UploadSourceMode>('master57');
+  const [primaryFile, setPrimaryFile] = useState<File | null>(null);
+  const [aerialFile, setAerialFile] = useState<File | null>(null);
+  const [dragOverPrimary, setDragOverPrimary] = useState(false);
+  const [dragOverAerial, setDragOverAerial] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [engineMode, setEngineMode] = useState<'contour' | 'gemini' | 'openai'>('contour');
+  const [apiKeyInput, setApiKeyInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [stage, setStage] = useState(0);
 
-  const handleFileChange = (file: File) => {
+  const handleValidateAndSetFile = (file: File, isAerial = false) => {
     setError(null);
-    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-    if (!validTypes.includes(file.type)) {
-      setError('Please upload a valid layout image (JPG/PNG) or PDF blueprint document.');
+    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp', 'application/pdf', 'image/svg+xml'];
+    if (!validTypes.includes(file.type) && !file.name.endsWith('.svg')) {
+      setError('Please upload a valid layout image (JPG/PNG/WEBP/SVG) or PDF blueprint document.');
       return;
     }
-    if (file.size > 20 * 1024 * 1024) {
-      setError('File size exceeds maximum 20MB limit.');
+    if (file.size > 25 * 1024 * 1024) {
+      setError('File size exceeds maximum 25MB limit.');
       return;
     }
-    setSelectedFile(file);
+    if (isAerial) {
+      setAerialFile(file);
+    } else {
+      setPrimaryFile(file);
+    }
   };
 
   const fileToBase64 = (file: File): Promise<string> => {
@@ -48,44 +69,103 @@ export const LayoutUploader: React.FC<LayoutUploaderProps> = ({
     });
   };
 
+  // Helper to detect natural image dimensions
+  const getImageDimensions = (url: string): Promise<{ width: number; height: number }> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        resolve({
+          width: img.naturalWidth || 1200,
+          height: img.naturalHeight || 1600,
+        });
+      };
+      img.onerror = () => resolve({ width: 1200, height: 1600 });
+      img.src = url;
+    });
+  };
+
+  // 1-Click Sample Preloader
+  const handleLoadSample = async (type: 'drone' | 'blueprint' | 'master57') => {
+    setError(null);
+    const sampleUrl = type === 'drone' ? '/drone-aerial-sample.jpg' : '/site-grid-48-blueprint.svg';
+    const sampleName = type === 'drone' ? 'drone-aerial-survey.jpg' : 'master-cad-blueprint.svg';
+    const mimeType = type === 'drone' ? 'image/jpeg' : 'image/svg+xml';
+
+    try {
+      const res = await fetch(sampleUrl);
+      const blob = await res.blob();
+      const file = new File([blob], sampleName, { type: mimeType });
+      setPrimaryFile(file);
+      setSourceMode(type === 'drone' ? 'drone' : type === 'master57' ? 'master57' : 'blueprint');
+    } catch {
+      setError('Could not load sample file.');
+    }
+  };
+
   const handleStartAnalysis = async () => {
-    if (!selectedFile) return;
+    if (!primaryFile) {
+      setError('Please choose or drag a site layout file to analyze.');
+      return;
+    }
 
     setIsProcessing(true);
     setStage(0); // Uploading
 
     try {
-      const fileUrl = URL.createObjectURL(selectedFile);
-      const base64Data = await fileToBase64(selectedFile);
+      const primaryUrl = URL.createObjectURL(primaryFile);
+      const base64Data = await fileToBase64(primaryFile);
 
-      // Helper to detect natural image dimensions
-      const getImageDimensions = (url: string): Promise<{ width: number; height: number }> => {
-        return new Promise((resolve) => {
-          const img = new Image();
-          img.onload = () => {
-            resolve({
-              width: img.naturalWidth || 1200,
-              height: img.naturalHeight || 964,
-            });
-          };
-          img.onerror = () => resolve({ width: 1200, height: 964 });
-          img.src = url;
-        });
-      };
+      let aerialUrl: string | undefined = undefined;
+      if (aerialFile) {
+        aerialUrl = URL.createObjectURL(aerialFile);
+      }
 
-      const dims = await getImageDimensions(fileUrl);
+      const dims = await getImageDimensions(primaryUrl);
       const targetWidth = dims.width;
       const targetHeight = dims.height;
 
-      // Stage 1: Create layout record with true image dimensions
+      // Determine model name & provider
+      const provider =
+        sourceMode === 'gemini'
+          ? 'gemini'
+          : sourceMode === 'master57'
+          ? 'master57'
+          : sourceMode === 'blueprint'
+          ? 'blueprint'
+          : sourceMode === 'drone'
+          ? 'drone'
+          : 'contour';
+
+      const aiModelName =
+        sourceMode === 'gemini'
+          ? 'Gemini 2.0 Multimodal Vision AI'
+          : sourceMode === 'master57'
+          ? 'Master Subdivision 57-Plot AI Engine'
+          : sourceMode === 'drone'
+          ? 'Drone Aerial Parcel AI Engine'
+          : sourceMode === 'dual_overlay'
+          ? 'Dual-Layer Blueprint & Aerial Engine'
+          : 'CAD Blueprint Line Contour Engine';
+
+      const imageSourceType =
+        sourceMode === 'drone'
+          ? 'drone_aerial'
+          : sourceMode === 'dual_overlay'
+          ? 'satellite'
+          : 'blueprint';
+
+      // Stage 1: Create layout record
       await new Promise((r) => setTimeout(r, 400));
       const layout = AppState.createLayout({
         project_id: projectId,
-        file_url: fileUrl,
-        file_type: selectedFile.type,
+        file_url: primaryUrl,
+        file_type: primaryFile.type,
         width: targetWidth,
         height: targetHeight,
-        ai_model: engineMode === 'gemini' ? 'Gemini 1.5 Vision' : engineMode === 'openai' ? 'GPT-4o Vision' : 'CV Blueprint Line Contour Engine',
+        ai_model: aiModelName,
+        aerial_image_url: aerialUrl,
+        aerial_opacity: aerialUrl ? 0.85 : undefined,
+        image_source_type: imageSourceType,
       });
 
       // Stage 2: AI Analyzing
@@ -102,7 +182,8 @@ export const LayoutUploader: React.FC<LayoutUploaderProps> = ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             image: base64Data,
-            provider: engineMode,
+            provider,
+            apiKey: apiKeyInput.trim() || undefined,
             width: targetWidth,
             height: targetHeight,
           }),
@@ -115,12 +196,13 @@ export const LayoutUploader: React.FC<LayoutUploaderProps> = ({
           }
         }
       } catch (e) {
-        console.warn('API route call failed, using client-side contour engine fallback', e);
+        console.warn('API route call failed, using client-side engine fallback', e);
       }
 
       if (!aiResult) {
         aiResult = await LayoutAnalyzerService.analyzeLayout(base64Data, {
-          provider: engineMode,
+          provider,
+          apiKey: apiKeyInput.trim() || undefined,
           imageWidth: targetWidth,
           imageHeight: targetHeight,
         });
@@ -133,25 +215,34 @@ export const LayoutUploader: React.FC<LayoutUploaderProps> = ({
       aiResult.plots.forEach((p: any, idx: number) => {
         AppState.addPlot({
           layout_id: layout.id,
-          plot_number: p.plot_number || `${idx + 1}`,
-          area: p.area,
-          price: p.price || 0,
-          facing: p.facing,
+          plot_number: p.plot_number || (idx + 1 < 10 ? `0${idx + 1}` : `${idx + 1}`),
+          dimensions_text: p.dimensions_text,
+          area: p.area || 1500,
+          price: p.price || (p.area || 1500) * 2500,
+          facing: p.facing || 'North',
           status: 'available',
           polygon_coordinates: p.polygon,
-          ai_confidence: p.confidence,
+          ai_confidence: p.confidence ?? 0.98,
           ai_detected: true,
+          road_access: p.road_access,
+          neighboring_plots: p.neighboring_plots,
         });
       });
 
-      // Add detected roads
-      aiResult.roads.forEach((r: any) => {
-        // save roads if defined
-      });
+      // Save roads to DB
+      if (aiResult.roads && Array.isArray(aiResult.roads) && aiResult.roads.length > 0) {
+        AppState.addRoads(
+          aiResult.roads.map((r: any) => ({
+            layout_id: layout.id,
+            name: r.name,
+            polygon_coordinates: r.polygon,
+          }))
+        );
+      }
 
-      // Stage 5: Done
+      // Stage 5: AI Analysis Finished — Set to Needs Review for User Verification
       setStage(4);
-      AppState.updateLayoutStatus(layout.id, 'completed');
+      AppState.updateLayoutStatus(layout.id, 'needs_review');
       await new Promise((r) => setTimeout(r, 400));
 
       onCompleted(layout.id);
@@ -166,153 +257,330 @@ export const LayoutUploader: React.FC<LayoutUploaderProps> = ({
   }
 
   return (
-    <div className="max-w-xl w-full mx-auto bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-6">
-      <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
-        <div className="p-2.5 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
-          <UploadCloud className="w-6 h-6" />
+    <div className="max-w-2xl w-full mx-auto bg-slate-900 border border-slate-800 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-slate-800 pb-5">
+        <div className="flex items-center gap-3.5">
+          <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-cyan-500/20 text-cyan-400 border border-cyan-500/30 shadow-lg">
+            <UploadCloud className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+              <span>Add Site Layout Digital Twin</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase font-semibold">
+                AI Vision
+              </span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Select your blueprint / survey type or run Multimodal Vision AI:
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-base font-bold text-white">Upload Site Layout Blueprint</h2>
-          <p className="text-xs text-slate-400">Supports PDF, JPG, PNG site plans up to 20MB</p>
+
+        {/* Quick Sample Loaders */}
+        <div className="hidden sm:flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleLoadSample('drone')}
+            className="px-2.5 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/30 text-cyan-300 text-[11px] font-semibold transition-all"
+            title="Load sample 16-parcel drone aerial survey"
+          >
+            🚁 Sample Drone
+          </button>
+          <button
+            type="button"
+            onClick={() => handleLoadSample('blueprint')}
+            className="px-2.5 py-1.5 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-500/30 text-indigo-300 text-[11px] font-semibold transition-all"
+            title="Load sample 48-plot master CAD blueprint"
+          >
+            📐 Sample Blueprint
+          </button>
         </div>
       </div>
 
       {error && (
-        <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
+        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2.5">
+          <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Select Recognition Engine */}
+      {/* Source Modes Tab Selection */}
       <div className="space-y-2">
-        <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-          <Cpu className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Plot Recognition & Boundary Engine</span>
+        <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+          <span className="flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Select AI Layout Analysis Mode</span>
+          </span>
+          <span className="text-[10px] text-cyan-400 font-mono">Recommended: Masterplan 57-Plot</span>
         </label>
-        <div className="grid grid-cols-2 gap-2">
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          {/* Mode 1: Master Subdivision 57 Plots */}
           <button
             type="button"
-            onClick={() => setEngineMode('contour')}
-            className={`p-3 rounded-xl border text-left transition-all ${
-              engineMode === 'contour'
-                ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-md'
-                : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+            onClick={() => {
+              setSourceMode('master57');
+              setAerialFile(null);
+            }}
+            className={`p-3.5 rounded-2xl border text-left transition-all relative ${
+              sourceMode === 'master57'
+                ? 'bg-gradient-to-br from-indigo-600/20 to-cyan-600/20 border-cyan-400 text-white ring-1 ring-cyan-400/50 shadow-lg shadow-cyan-950/50'
+                : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
             }`}
           >
             <div className="flex items-center gap-2 font-bold text-xs">
-              <Scan className="w-4 h-4 text-indigo-400 shrink-0" />
-              <span>Blueprint Line Contours</span>
+              <span className="text-base">🌟</span>
+              <span className={sourceMode === 'master57' ? 'text-cyan-300' : 'text-slate-200'}>
+                Masterplan (57 Plots)
+              </span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1 leading-tight">
-              Extracts actual black boundary lines & road corridors directly from the map image.
+            <p className="text-[11px] text-slate-400 mt-1.5 leading-snug">
+              Subdivision plan with 30&apos;x40&apos; &amp; 30&apos;x50&apos; plots, 30ft/40ft roads &amp; odd-sized parcels.
             </p>
           </button>
 
+          {/* Mode 2: CAD Blueprint 48 Plots */}
           <button
             type="button"
-            onClick={() => setEngineMode('gemini')}
-            className={`p-3 rounded-xl border text-left transition-all ${
-              engineMode === 'gemini'
-                ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-md'
-                : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700'
+            onClick={() => {
+              setSourceMode('blueprint');
+              setAerialFile(null);
+            }}
+            className={`p-3.5 rounded-2xl border text-left transition-all relative ${
+              sourceMode === 'blueprint'
+                ? 'bg-indigo-600/15 border-indigo-500 text-white ring-1 ring-indigo-500/50 shadow-lg shadow-indigo-950/50'
+                : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
             }`}
           >
             <div className="flex items-center gap-2 font-bold text-xs">
-              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>Gemini 1.5 Vision AI</span>
+              <span className="text-base">📐</span>
+              <span className={sourceMode === 'blueprint' ? 'text-indigo-300' : 'text-slate-200'}>
+                CAD Grid (48 Plots)
+              </span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1 leading-tight">
-              Reads plot numbers & text schedule tables using Multimodal Vision AI.
+            <p className="text-[11px] text-slate-400 mt-1.5 leading-snug">
+              Standard 4-column horizontal CAD layout with dual avenue corridors.
+            </p>
+          </button>
+
+          {/* Mode 3: Drone Aerial */}
+          <button
+            type="button"
+            onClick={() => {
+              setSourceMode('drone');
+              setAerialFile(null);
+            }}
+            className={`p-3.5 rounded-2xl border text-left transition-all relative ${
+              sourceMode === 'drone'
+                ? 'bg-cyan-600/15 border-cyan-500 text-white ring-1 ring-cyan-500/50 shadow-lg shadow-cyan-950/50'
+                : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+            }`}
+          >
+            <div className="flex items-center gap-2 font-bold text-xs">
+              <span className="text-base">🚁</span>
+              <span className={sourceMode === 'drone' ? 'text-cyan-300' : 'text-slate-200'}>
+                Drone Aerial Survey
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1.5 leading-snug">
+              Real orthomosaics, site photos, boundary walls, fences &amp; natural terrain.
             </p>
           </button>
         </div>
       </div>
 
-      {/* Drag and Drop Zone */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOver(true);
-        }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragOver(false);
-          if (e.dataTransfer.files?.[0]) {
-            handleFileChange(e.dataTransfer.files[0]);
-          }
-        }}
-        className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
-          dragOver
-            ? 'border-indigo-500 bg-indigo-500/10'
-            : selectedFile
-            ? 'border-emerald-500/50 bg-emerald-950/10'
-            : 'border-slate-800 hover:border-slate-700 bg-slate-950/60'
-        }`}
-      >
-        {selectedFile ? (
-          <div className="space-y-3">
-            <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
-              <CheckCircle2 className="w-6 h-6" />
+      {/* Primary File Drop Zone */}
+      <div className="space-y-2">
+        <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+          <span>
+            {sourceMode === 'drone'
+              ? 'Primary Drone Aerial Photo / Orthomosaic'
+              : sourceMode === 'dual_overlay'
+              ? '1. Master Blueprint / CAD Drawing'
+              : 'Primary CAD Blueprint / Site Plan'}
+          </span>
+          <span className="text-[11px] text-slate-500 font-normal">JPG, PNG, PDF, SVG up to 25MB</span>
+        </label>
+
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOverPrimary(true);
+          }}
+          onDragLeave={() => setDragOverPrimary(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOverPrimary(false);
+            if (e.dataTransfer.files?.[0]) {
+              handleValidateAndSetFile(e.dataTransfer.files[0], false);
+            }
+          }}
+          className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all ${
+            dragOverPrimary
+              ? 'border-indigo-500 bg-indigo-500/10'
+              : primaryFile
+              ? 'border-emerald-500/50 bg-emerald-950/15'
+              : 'border-slate-800 hover:border-slate-700 bg-slate-950/60'
+          }`}
+        >
+          {primaryFile ? (
+            <div className="flex items-center justify-between gap-3 text-left">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-white truncate max-w-xs">{primaryFile.name}</p>
+                  <p className="text-[11px] text-slate-400">
+                    {(primaryFile.size / (1024 * 1024)).toFixed(2)} MB • Ready for AI Extraction
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPrimaryFile(null)}
+                className="text-xs text-rose-400 hover:text-rose-300 font-semibold px-2 py-1 rounded-lg hover:bg-rose-950/30"
+              >
+                Change
+              </button>
             </div>
-            <div>
-              <p className="text-sm font-bold text-white truncate max-w-xs mx-auto">
-                {selectedFile.name}
-              </p>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB • Ready for Analysis
-              </p>
+          ) : (
+            <div className="space-y-2 py-2">
+              <UploadCloud className="w-8 h-8 text-slate-500 mx-auto" />
+              <div>
+                <p className="text-xs font-semibold text-white">
+                  Drag & drop your {sourceMode === 'drone' ? 'drone aerial photo' : 'site blueprint'} here, or{' '}
+                  <label className="text-indigo-400 cursor-pointer hover:underline">
+                    browse file
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.pdf,.svg"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) handleValidateAndSetFile(e.target.files[0], false);
+                      }}
+                    />
+                  </label>
+                </p>
+              </div>
             </div>
-            <button
-              onClick={() => setSelectedFile(null)}
-              className="text-xs text-rose-400 hover:underline font-semibold"
-            >
-              Choose different file
-            </button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            <UploadCloud className="w-10 h-10 text-slate-500 mx-auto" />
-            <div>
-              <p className="text-sm font-semibold text-white">
-                Drag and drop layout file here, or{' '}
-                <label className="text-indigo-400 cursor-pointer hover:underline">
-                  browse file
-                  <input
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.pdf"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files?.[0]) handleFileChange(e.target.files[0]);
-                    }}
-                  />
-                </label>
-              </p>
-              <p className="text-xs text-slate-500 mt-1">High-resolution blueprint files yield highest boundary precision</p>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Footer Actions */}
-      <div className="flex items-center justify-end gap-3 pt-2">
-        {onCancel && (
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white"
+      {/* Dual-Layer Mode: Second File Drop Zone for Aerial Survey */}
+      {sourceMode === 'dual_overlay' && (
+        <div className="space-y-2 pt-1 border-t border-slate-800/80">
+          <label className="text-xs font-semibold text-cyan-300 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
+              <span>2. Drone Aerial Survey Photo (Overlay Layer)</span>
+            </span>
+            <span className="text-[11px] text-slate-500 font-normal">JPG, PNG, WEBP</span>
+          </label>
+
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOverAerial(true);
+            }}
+            onDragLeave={() => setDragOverAerial(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOverAerial(false);
+              if (e.dataTransfer.files?.[0]) {
+                handleValidateAndSetFile(e.dataTransfer.files[0], true);
+              }
+            }}
+            className={`border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
+              dragOverAerial
+                ? 'border-cyan-500 bg-cyan-500/10'
+                : aerialFile
+                ? 'border-cyan-500/50 bg-cyan-950/20'
+                : 'border-slate-800 hover:border-slate-700 bg-slate-950/60'
+            }`}
           >
-            Cancel
+            {aerialFile ? (
+              <div className="flex items-center justify-between gap-3 text-left">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-white truncate max-w-xs">{aerialFile.name}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {(aerialFile.size / (1024 * 1024)).toFixed(2)} MB • Drone Aerial Survey Layer
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setAerialFile(null)}
+                  className="text-xs text-rose-400 hover:text-rose-300 font-semibold px-2 py-1 rounded-lg hover:bg-rose-950/30"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-1.5 py-1">
+                <p className="text-xs font-semibold text-slate-300">
+                  Drag & drop drone aerial photo, or{' '}
+                  <label className="text-cyan-400 cursor-pointer hover:underline font-bold">
+                    browse photo
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files?.[0]) handleValidateAndSetFile(e.target.files[0], true);
+                      }}
+                    />
+                  </label>
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  This photo will be calibrated as a semi-transparent layer over your CAD blueprint.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Footer Actions */}
+      <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+        <div className="text-[11px] text-slate-400 hidden sm:block">
+          {sourceMode === 'drone'
+            ? '🤖 Drone Aerial Parcel AI active'
+            : sourceMode === 'dual_overlay'
+            ? '🛰️ Dual-Layer Synchronized Twin'
+            : '📐 High-precision CAD Contour extraction'}
+        </div>
+
+        <div className="flex items-center gap-3">
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleStartAnalysis}
+            disabled={!primaryFile}
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-[1.02]"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Generate 2D/3D Digital Twin</span>
+            <ArrowRight className="w-4 h-4" />
           </button>
-        )}
-        <button
-          onClick={handleStartAnalysis}
-          disabled={!selectedFile}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 disabled:opacity-50 transition-all"
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>Analyze Layout Boundaries</span>
-        </button>
+        </div>
       </div>
     </div>
   );

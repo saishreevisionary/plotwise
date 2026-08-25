@@ -9,7 +9,9 @@ interface EnvironmentDecorations3DProps {
   layoutWidth: number;
   layoutHeight: number;
   roads: Road[];
+  projectName?: string;
   timeOfDay?: 'day' | 'sunset' | 'night';
+  hideEntranceSign?: boolean;
 }
 
 // Low-poly 3D Car Model
@@ -121,7 +123,11 @@ const CypressTree3D: React.FC<{ position: [number, number, number]; scale?: numb
 };
 
 // Entrance Archway Gate
-const EntranceArchway3D: React.FC<{ position: [number, number, number] }> = ({ position }) => {
+const EntranceArchway3D: React.FC<{
+  position: [number, number, number];
+  projectName?: string;
+  hideSign?: boolean;
+}> = ({ position, projectName, hideSign = false }) => {
   return (
     <group position={position}>
       {/* Left Pillar */}
@@ -142,13 +148,15 @@ const EntranceArchway3D: React.FC<{ position: [number, number, number] }> = ({ p
         <meshStandardMaterial color="#0f172a" roughness={0.3} metalness={0.8} />
       </mesh>
 
-      {/* Golden Welcome Sign Badge */}
-      <Html position={[0, 3.25, 0.38]} center distanceFactor={26}>
-        <div className="bg-slate-950/95 border border-amber-500/50 px-3 py-1 rounded-lg text-[11px] font-extrabold text-amber-400 tracking-widest uppercase shadow-2xl whitespace-nowrap flex items-center gap-1.5 pointer-events-none">
-          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-          <span>GREEN VALLEY ESTATES • MAIN ENTRANCE</span>
-        </div>
-      </Html>
+      {/* Golden Welcome Sign Badge — hidden in street view / walk mode so it never blocks UI */}
+      {!hideSign && (
+        <Html position={[0, 3.25, 0.38]} center distanceFactor={16} pointerEvents="none" zIndexRange={[10, 0]}>
+          <div className="bg-slate-950/95 border border-amber-500/50 px-3 py-1 rounded-lg text-[10px] font-extrabold text-amber-400 tracking-widest uppercase shadow-2xl whitespace-nowrap flex items-center gap-1.5 pointer-events-none">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+            <span>{projectName ? `${projectName.toUpperCase()} • MAIN ENTRANCE` : 'RESIDENTIAL SITE • MAIN ENTRANCE'}</span>
+          </div>
+        </Html>
+      )}
     </group>
   );
 };
@@ -157,7 +165,9 @@ export const EnvironmentDecorations3D: React.FC<EnvironmentDecorations3DProps> =
   layoutWidth = 1200,
   layoutHeight = 964,
   roads = [],
+  projectName,
   timeOfDay = 'day',
+  hideEntranceSign = false,
 }) => {
   const worldScaleX = 40 / layoutWidth;
   const worldScaleZ = 27.5 / layoutHeight;
@@ -270,7 +280,7 @@ export const EnvironmentDecorations3D: React.FC<EnvironmentDecorations3DProps> =
       ))}
 
       {/* Main Entrance Gate Archway */}
-      <EntranceArchway3D position={[0, 0, 13.0]} />
+      <EntranceArchway3D position={[0, 0, 13.0]} projectName={projectName} hideSign={hideEntranceSign} />
 
       {/* Roadside Trees */}
       {roadsideTrees.map((tree, idx) =>
