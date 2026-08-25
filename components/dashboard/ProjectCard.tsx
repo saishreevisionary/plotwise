@@ -3,13 +3,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { Project } from '@/types';
-import { MapPin, Layers, Box, ArrowRight, Sparkles, Calendar } from 'lucide-react';
+import { MapPin, Layers, Box, ArrowRight, Sparkles, Calendar, Trash2 } from 'lucide-react';
 
 interface ProjectCardProps {
   project: Project;
+  onDelete?: (projectId: string) => void;
 }
 
-export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
+export const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete }) => {
   const isDemo = project.id === 'demo-project-green-valley';
   const total = project.total_plots || 0;
   const avail = project.available_plots || 0;
@@ -30,12 +31,30 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
             <span className="truncate max-w-[180px]">{project.location}</span>
           </span>
 
-          {isDemo && (
-            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-amber-400" />
-              Demo Township
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {isDemo && (
+              <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                Demo
+              </span>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (window.confirm(`Delete project "${project.name}"?`)) {
+                    onDelete(project.id);
+                  }
+                }}
+                title="Delete Project"
+                className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Title */}

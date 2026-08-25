@@ -1,6 +1,6 @@
 'use client';
 
-import { Project, Layout, Plot, Road, PlotStatusHistory, PlotStatus, PolygonPoint } from '@/types';
+import { Project, Layout, Plot, Road, PlotStatusHistory, PlotStatus, PolygonPoint, GpsAnchor, AccuracyMode, AIAnalysisResult } from '@/types';
 import { LayoutAnalyzerService } from '@/lib/ai/layout-analyzer';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
@@ -207,6 +207,9 @@ export class AppState {
     width?: number;
     height?: number;
     ai_model?: string;
+    aerial_image_url?: string;
+    aerial_opacity?: number;
+    image_source_type?: 'blueprint' | 'drone_aerial' | 'satellite' | 'site_photo' | 'scanned_plan';
   }): Layout {
     const store = this.getStore();
     const newLayout: Layout = {
@@ -218,6 +221,9 @@ export class AppState {
       original_height: data.height || 1200,
       processing_status: 'processing',
       ai_model: data.ai_model || 'Vision-OCR PlotDetector v2.4',
+      aerial_image_url: data.aerial_image_url,
+      aerial_opacity: data.aerial_opacity ?? (data.aerial_image_url ? 0.8 : undefined),
+      image_source_type: data.image_source_type || 'blueprint',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -268,11 +274,150 @@ export class AppState {
     }
   }
 
+  static updateLayoutGpsAnchor(layoutId: string, anchor: GpsAnchor): Layout | null {
+    const store = this.getStore();
+    const layout = store.layouts.find((l) => l.id === layoutId);
+    if (!layout) return null;
+
+    layout.gps_anchor = anchor;
+    layout.accuracy_mode = 'calibrated';
+    layout.calibration_status = 'calibrated';
+    layout.updated_at = new Date().toISOString();
+
+    const width = layout.original_width || 1200;
+    const height = layout.original_height || 964;
+
+    // Update geo_polygon and calculate real-world geodesic area for all plots in this layout
+    store.plots = store.plots.map((p) => {
+      if (p.layout_id === layoutId) {
+        const poly = p.polygon_coordinates || [];
+        const geoPoly = LayoutAnalyzerService.projectPolygonToGps(poly, width, height, anchor);
+        const { areaSqMeters, areaSqFeet } = LayoutAnalyzerService.calculateGeodesicPolygonArea(geoPoly);
+        return {
+          ...p,
+          geo_polygon: geoPoly,
+          image_polygon: poly,
+          area_sq_meters: areaSqMeters,
+          area: areaSqFeet > 0 ? areaSqFeet : p.area,
+          real_world_scale_calibrated: true,
+          accuracy_mode: 'calibrated',
+        };
+      }
+      return p;
+    });
+
+    // Update geo_polygon for roads
+    store.roads = store.roads.map((r) => {
+      if (r.layout_id === layoutId) {
+        const geoPoly = LayoutAnalyzerService.projectPolygonToGps(r.polygon_coordinates, width, height, anchor);
+        return { ...r, geo_polygon: geoPoly };
+      }
+      return r;
+    });
+
+    saveData(store);
+    return layout;
+  }
+
+  static updateLayoutAerial(layoutId: string, aerialUrl: string, opacity: number = 0.85): Layout | null {
+    const store = this.getStore();
+    const layout = store.layouts.find((l) => l.id === layoutId);
+    if (!layout) return null;
+
+    layout.aerial_image_url = aerialUrl;
+    layout.aerial_opacity = opacity;
+    layout.updated_at = new Date().toISOString();
+
+    saveData(store);
+    return layout;
+  }
+
+  static updateLayoutAccuracyMode(layoutId: string, mode: AccuracyMode): Layout | null {
+    const store = this.getStore();
+    const layout = store.layouts.find((l) => l.id === layoutId);
+    if (!layout) return null;
+
+    layout.accuracy_mode = mode;
+    layout.updated_at = new Date().toISOString();
+
+    saveData(store);
+    return layout;
+  }
+
+  static recalculateProjectStats(projectId: string) {
+    const store = this.getStore();
+    const proj = store.projects.find((p) => p.id === projectId);
+    if (!proj) return;
+
+    const layoutIds = store.layouts.filter((l) => l.project_id === projectId).map((l) => l.id);
+    const projPlots = store.plots.filter((p) => layoutIds.includes(p.layout_id));
+
+    proj.total_plots = projPlots.length;
+    proj.available_plots = projPlots.filter((p) => p.status === 'available').length;
+    proj.booked_plots = projPlots.filter((p) => p.status === 'booked').length;
+    proj.sold_plots = projPlots.filter((p) => p.status === 'sold').length;
+    proj.updated_at = new Date().toISOString();
+  }
+
+  static deleteLayout(layoutId: string): boolean {
+    const store = this.getStore();
+    const layout = store.layouts.find((l) => l.id === layoutId);
+    if (!layout) return false;
+
+    const projectId = layout.project_id;
+    store.layouts = store.layouts.filter((l) => l.id !== layoutId);
+    store.plots = store.plots.filter((p) => p.layout_id !== layoutId);
+    store.roads = store.roads.filter((r) => r.layout_id !== layoutId);
+
+    this.recalculateProjectStats(projectId);
+    saveData(store);
+    return true;
+  }
+
+  static deleteProject(projectId: string): boolean {
+    const store = this.getStore();
+    const index = store.projects.findIndex((p) => p.id === projectId);
+    if (index === -1) return false;
+
+    const layoutIds = store.layouts.filter((l) => l.project_id === projectId).map((l) => l.id);
+    store.projects.splice(index, 1);
+    store.layouts = store.layouts.filter((l) => l.project_id !== projectId);
+    store.plots = store.plots.filter((p) => !layoutIds.includes(p.layout_id));
+    store.roads = store.roads.filter((r) => !layoutIds.includes(r.layout_id));
+
+    saveData(store);
+    return true;
+  }
+
   // --- PLOTS ---
   static getPlotsByLayoutId(layoutId: string): Plot[] {
     try {
       const store = this.getStore();
-      return (store.plots || []).filter((p) => Boolean(p && p.layout_id === layoutId));
+      const layout = store.layouts.find((l) => l.id === layoutId);
+      const rawPlots = (store.plots || []).filter((p) => Boolean(p && p.layout_id === layoutId));
+
+      // If layout has a gps_anchor, dynamically ensure geo_polygon is populated
+      if (layout?.gps_anchor) {
+        const width = layout.original_width || 1200;
+        const height = layout.original_height || 964;
+        const anchor = layout.gps_anchor;
+
+        return rawPlots.map((p) => {
+          if (!p.geo_polygon || p.geo_polygon.length === 0) {
+            return {
+              ...p,
+              image_polygon: p.polygon_coordinates,
+              geo_polygon: LayoutAnalyzerService.projectPolygonToGps(p.polygon_coordinates, width, height, anchor),
+            };
+          }
+          return {
+            ...p,
+            image_polygon: p.polygon_coordinates,
+          };
+        });
+      }
+
+      return rawPlots;
     } catch (err) {
       console.error(`Error getting plots for layout ${layoutId}:`, err);
       return [];
@@ -396,6 +541,10 @@ export class AppState {
     }
 
     return plot;
+  }
+
+  static updatePlot(plotId: string, updates: Partial<Plot>): Plot | null {
+    return this.updatePlotDetails(plotId, updates);
   }
 
   static updatePlotDetails(plotId: string, updates: Partial<Plot>): Plot | null {
@@ -556,6 +705,30 @@ export class AppState {
     return store.roads.filter((r) => r.layout_id === layoutId);
   }
 
+  static addRoad(road: Omit<Road, 'id' | 'created_at'>): Road {
+    const store = this.getStore();
+    const newRoad: Road = {
+      ...road,
+      id: `road-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      created_at: new Date().toISOString(),
+    };
+    store.roads.push(newRoad);
+    saveData(store);
+    return newRoad;
+  }
+
+  static addRoads(roads: Omit<Road, 'id' | 'created_at'>[]): Road[] {
+    const store = this.getStore();
+    const newRoads: Road[] = roads.map((road, idx) => ({
+      ...road,
+      id: `road-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
+      created_at: new Date().toISOString(),
+    }));
+    store.roads.push(...newRoads);
+    saveData(store);
+    return newRoads;
+  }
+
   // --- STATUS HISTORY ---
   static getPlotHistory(plotId: string): PlotStatusHistory[] {
     const store = this.getStore();
@@ -564,34 +737,55 @@ export class AppState {
       .sort((a, b) => new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime());
   }
 
-  static realignLayoutGrid(layoutId: string, width?: number, height?: number): Plot[] {
+  static realignLayoutGrid(
+    layoutId: string,
+    width?: number,
+    height?: number,
+    mode: 'master57' | 'blueprint' | 'drone' | 'villa4' = 'master57'
+  ): Plot[] {
     const store = this.getStore();
     const layout = store.layouts.find((l) => l.id === layoutId);
     const w = width || layout?.original_width || 1200;
-    const h = height || layout?.original_height || 964;
+    const h = height || layout?.original_height || 1600;
 
-    const result = LayoutAnalyzerService.generate48PlotGrid(w, h);
+    const result =
+      mode === 'master57'
+        ? LayoutAnalyzerService.generate57PlotMasterplan(w, h)
+        : mode === 'drone'
+        ? LayoutAnalyzerService.generateDroneAerialLayout(w, h)
+        : mode === 'villa4'
+        ? LayoutAnalyzerService.generateVilla4Grid(w, h)
+        : LayoutAnalyzerService.generate48PlotGrid(w, h);
+
+    return this.applyAiAnalysisResult(layoutId, result);
+  }
+
+  static applyAiAnalysisResult(layoutId: string, result: AIAnalysisResult): Plot[] {
+    const store = this.getStore();
 
     // Remove existing plots & roads for this layout
     store.plots = store.plots.filter((p) => p.layout_id !== layoutId);
     store.roads = store.roads.filter((r) => r.layout_id !== layoutId);
 
-    const newPlots: Plot[] = result.plots.map((p, idx) => ({
+    const newPlots: Plot[] = (result.plots || []).map((p: any, idx: number) => ({
       id: `plot-${layoutId}-${p.plot_number}-${Date.now()}-${idx}`,
       layout_id: layoutId,
       plot_number: p.plot_number,
+      dimensions_text: p.dimensions_text,
       area: p.area,
-      price: p.price || 0,
+      price: p.price || p.area * 2500,
       facing: p.facing,
       status: 'available',
       polygon_coordinates: p.polygon,
-      ai_confidence: p.confidence,
+      ai_confidence: p.confidence ?? 0.98,
       ai_detected: true,
+      road_access: p.road_access,
+      neighboring_plots: p.neighboring_plots,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }));
 
-    const newRoads: Road[] = result.roads.map((r, idx) => ({
+    const newRoads: Road[] = (result.roads || []).map((r: any, idx: number) => ({
       id: `road-${layoutId}-${idx}`,
       layout_id: layoutId,
       name: r.name,

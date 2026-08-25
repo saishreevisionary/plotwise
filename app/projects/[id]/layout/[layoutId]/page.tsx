@@ -5,6 +5,7 @@ import Link from 'next/link';
 import confetti from 'canvas-confetti';
 import { Header } from '@/components/layout/Header';
 import { InteractiveLayoutMap } from '@/components/map/InteractiveLayoutMap';
+import { MapGpsViewer } from '@/components/map/MapGpsViewer';
 import { ThreeDLayoutViewer } from '@/components/3d/ThreeDLayoutViewer';
 import { PlotDetailsPanel } from '@/components/plot/PlotDetailsPanel';
 import { PlotSearch } from '@/components/plot/PlotSearch';
@@ -14,7 +15,7 @@ import { ClientBrokerCodeGate } from '@/components/auth/ClientBrokerCodeGate';
 import { PlotReservationModal } from '@/components/plot/PlotReservationModal';
 import { AuthStore } from '@/lib/store/auth-store';
 import { AppState } from '@/lib/store/app-state';
-import { Project, Layout, Plot, Road, PlotStatusHistory, PlotStatus, PolygonPoint, UserProfile } from '@/types';
+import { Project, Layout, Plot, Road, PlotStatusHistory, PlotStatus, PolygonPoint, UserProfile, GpsAnchor } from '@/types';
 import {
   MapPin,
   Box,
@@ -30,6 +31,8 @@ import {
   TrendingUp,
   Key,
   ShieldCheck,
+  Globe,
+  ImageIcon,
 } from 'lucide-react';
 
 export default function InteractiveMapPage({
@@ -45,11 +48,11 @@ export default function InteractiveMapPage({
   const [roads, setRoads] = useState<Road[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile>(AuthStore.getCurrentUser());
 
-  // Selected plot state (Single source of truth for 2D & 3D)
+  // Selected plot state (Single source of truth across Image Mode, Map/GPS, and 3D)
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>('plot-gv-27');
 
-  // View Mode: '2d' or '3d'
-  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  // View Mode: 'image' (2D Image Layout), 'map' (Satellite Map/GPS), or '3d' (ThreeJS 3D Twin)
+  const [viewMode, setViewMode] = useState<'image' | 'map' | '3d'>('image');
 
   // Edit Mode state for vertex dragging
   const [isEditMode, setIsEditMode] = useState(false);
@@ -83,6 +86,29 @@ export default function InteractiveMapPage({
       loadData();
       setSelectedPlotId(createdPlots[0].id);
     }
+  };
+
+  // Handle Aerial Image Upload & Opacity Updates
+  const handleUploadAerial = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = reader.result as string;
+      AppState.updateLayoutAerial(layoutId, url, 0.85);
+      loadData();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUpdateAerialOpacity = (opacity: number) => {
+    if (layout?.aerial_image_url) {
+      AppState.updateLayoutAerial(layoutId, layout.aerial_image_url, opacity);
+      loadData();
+    }
+  };
+
+  const handleUpdateGpsAnchor = (anchor: GpsAnchor) => {
+    AppState.updateLayoutGpsAnchor(layoutId, anchor);
+    loadData();
   };
 
   // Status History for selected plot
@@ -215,6 +241,70 @@ export default function InteractiveMapPage({
     }
   };
 
+  // Handle Manually Drawn Plot Polygon
+  const handleAddNewPlotPolygon = (coords: PolygonPoint[]) => {
+    const xs = coords.map((p) => p[0]);
+    const ys = coords.map((p) => p[1]);
+    const w = Math.max(...xs) - Math.min(...xs);
+    const h = Math.max(...ys) - Math.min(...ys);
+    const areaSqFt = Math.round(w * h * 0.25) || 1500;
+    const nextNum = plots.length + 1;
+    const plotNumStr = nextNum < 10 ? `P0${nextNum}` : `P${nextNum}`;
+
+    AppState.addPlot({
+      layout_id: layoutId,
+      plot_number: plotNumStr,
+      area: areaSqFt,
+      price: areaSqFt * 2500,
+      facing: 'East',
+      status: 'available',
+      polygon_coordinates: coords,
+      ai_confidence: 1.0,
+      ai_detected: false,
+    });
+    loadData();
+  };
+
+  // Handle Confirm Layout & Transition to GPS / Map
+  const handleConfirmLayout = () => {
+    AppState.updateLayoutStatus(layoutId, 'completed');
+    setViewMode('map');
+  };
+
+  // Handle True 4-Point GCP Georeferencing Confirmation
+  const handleConfirmGcpTransformation = (
+    transformedPlots: Plot[],
+    transformedRoads: Road[],
+    newAnchor: GpsAnchor
+  ) => {
+    if (!layout) return;
+
+    AppState.updateLayoutGpsAnchor(layout.id, newAnchor);
+    setPlots(transformedPlots);
+    setRoads(transformedRoads);
+    setLayout((prev) =>
+      prev
+        ? {
+            ...prev,
+            gps_anchor: newAnchor,
+            accuracy_mode: 'calibrated',
+            calibration_status: 'calibrated',
+          }
+        : prev
+    );
+
+    transformedPlots.forEach((p) => {
+      AppState.updatePlot(p.id, {
+        geo_polygon: p.geo_polygon,
+        area: p.area,
+        area_sq_meters: p.area_sq_meters,
+        price: p.price,
+        real_world_scale_calibrated: true,
+        accuracy_mode: 'calibrated',
+      });
+    });
+  };
+
   // Count stats
   const totalPlots = plots.length;
   const availablePlots = plots.filter((p) => p.status === 'available').length;
@@ -261,7 +351,7 @@ export default function InteractiveMapPage({
           />
         </div>
 
-        {/* Right: 2D/3D Mode Toggle & Actions */}
+        {/* Right: 3-Way Mode Switcher & Actions */}
         <div className="flex items-center gap-3">
           {currentUser.role !== 'admin' && (
             <button
@@ -273,21 +363,39 @@ export default function InteractiveMapPage({
             </button>
           )}
 
-          {/* 2D / 3D Mode View Toggle */}
+          {/* 3-Way Mode View Toggle: [Image Layout] [Map/GPS] [3D Digital Twin] */}
           <div className="bg-slate-900 border border-slate-800 p-1 rounded-xl flex items-center gap-1 shadow-inner">
             <button
-              onClick={() => setViewMode('2d')}
+              onClick={() => setViewMode('image')}
+              title="2D Blueprint & Aerial Layout"
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                viewMode === '2d'
+                viewMode === 'image'
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Layers className="w-3.5 h-3.5" />
-              <span>2D MAP</span>
+              <ImageIcon className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Image Layout</span>
+              <span className="md:hidden">2D</span>
             </button>
+
+            <button
+              onClick={() => setViewMode('map')}
+              title="Real-World Satellite GPS Map"
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === 'map'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5 text-emerald-300" />
+              <span className="hidden md:inline">Map / GPS</span>
+              <span className="md:hidden">Map</span>
+            </button>
+
             <button
               onClick={() => setViewMode('3d')}
+              title="3D Walk & Orbit Digital Twin"
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                 viewMode === '3d'
                   ? 'bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-md shadow-cyan-500/30'
@@ -295,15 +403,17 @@ export default function InteractiveMapPage({
               }`}
             >
               <Box className="w-3.5 h-3.5 text-cyan-300" />
-              <span>3D VIEW</span>
+              <span className="hidden md:inline">3D Twin</span>
+              <span className="md:hidden">3D</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* Sub-Header Inventory Stats Bar */}
-      <div className="h-10 border-b border-slate-800/80 bg-slate-900/60 px-4 flex items-center justify-between text-xs text-slate-300 shrink-0 overflow-x-auto">
-        <div className="flex items-center gap-6 font-medium shrink-0">
+      {/* Sub-Header Inventory & Dual-Mode Status Bar */}
+      <div className="h-10 border-b border-slate-800/80 bg-slate-900/60 px-4 flex items-center justify-between text-xs text-slate-300 shrink-0 overflow-x-auto gap-4">
+        {/* Left: Inventory Counts */}
+        <div className="flex items-center gap-5 font-medium shrink-0">
           <div className="flex items-center gap-1.5">
             <Grid className="w-3.5 h-3.5 text-indigo-400" />
             <span>Total:</span>
@@ -329,30 +439,65 @@ export default function InteractiveMapPage({
           </div>
         </div>
 
-        {/* Selected Plot indicator in stats bar */}
-        {selectedPlot && (
-          <div className="hidden md:flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/30 px-2.5 py-0.5 rounded-md text-[11px]">
-            <span className="text-slate-400">Active Selection:</span>
-            <span className="font-bold text-indigo-300">Plot {selectedPlot.plot_number}</span>
-            <span className="text-slate-400">({selectedPlot.area} sq.ft)</span>
+        {/* Center/Right: Geospatial & Dual-Mode Status Indicators */}
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Analysis Status */}
+          <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-slate-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span>Image Analysis:</span>
+            <span className="font-semibold text-slate-200">
+              {layout?.processing_status === 'completed' ? 'Verified' : 'Complete'}
+            </span>
           </div>
-        )}
+
+          {/* GPS Calibration Status */}
+          <div className="hidden sm:flex items-center gap-1.5 text-[11px]">
+            {layout?.gps_anchor?.lat ? (
+              <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold flex items-center gap-1">
+                <Globe className="w-3 h-3 text-emerald-400" />
+                <span>GPS Calibrated</span>
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-slate-700 font-semibold flex items-center gap-1">
+                <Globe className="w-3 h-3 text-slate-500" />
+                <span>GPS Uncalibrated (Image Mode)</span>
+              </span>
+            )}
+          </div>
+
+          {/* Active Plot Selection Indicator */}
+          {selectedPlot && (
+            <div className="flex items-center gap-1.5 bg-indigo-500/10 border border-indigo-500/30 px-2.5 py-0.5 rounded-md text-[11px]">
+              <span className="text-slate-400">Selected:</span>
+              <span className="font-bold text-indigo-300">Plot {selectedPlot.plot_number}</span>
+              {selectedPlot.geo_polygon && selectedPlot.geo_polygon.length > 0 ? (
+                <span className="text-emerald-400 font-mono">({selectedPlot.area} sq.ft / {selectedPlot.area_sq_meters || Math.round(selectedPlot.area / 10.7639)}m²)</span>
+              ) : (
+                <span className="text-slate-400">({selectedPlot.area} sq.ft)</span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Workspace Body */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Viewing Canvas Container (Toggles 2D / 3D) */}
-        <div className="flex-1 h-full relative">
-          {viewMode === '2d' ? (
+        {/* Viewing Canvas Container (Toggles Image Layout / Satellite Map / 3D) */}
+        <div className="flex-1 min-w-0 h-full relative">
+          {viewMode === 'image' ? (
             <InteractiveLayoutMap
               layoutWidth={layout?.original_width || 1200}
               layoutHeight={layout?.original_height || 964}
               fileUrl={layout?.file_url || '/site-grid-48-blueprint.svg'}
+              aerialImageUrl={layout?.aerial_image_url}
+              aerialOpacity={layout?.aerial_opacity}
               plots={plots}
               roads={roads}
               selectedPlotId={selectedPlotId}
               onSelectPlot={(p) => setSelectedPlotId(p ? p.id : null)}
               onUpdatePlotPolygon={handleUpdatePolygon}
+              onUploadAerial={handleUploadAerial}
+              onUpdateAerialOpacity={handleUpdateAerialOpacity}
               isEditMode={isEditMode}
               onToggleEditMode={() => setIsEditMode(!isEditMode)}
               onAddPlotClick={() => {
@@ -363,20 +508,44 @@ export default function InteractiveMapPage({
                 setTargetSplitPlot(p);
                 setIsSplitModalOpen(true);
               }}
-              onRealignGridClick={() => {
-                AppState.realignLayoutGrid(layoutId, layout?.original_width, layout?.original_height);
+              onRealignGridClick={(mode) => {
+                AppState.realignLayoutGrid(layoutId, layout?.original_width, layout?.original_height, mode);
                 loadData();
               }}
+              onDeletePlot={handleDeletePlot}
+              onAddNewPlotPolygon={handleAddNewPlotPolygon}
+              onConfirmLayout={handleConfirmLayout}
+              isConfirmed={layout?.status === 'completed'}
+            />
+          ) : viewMode === 'map' ? (
+            <MapGpsViewer
+              plots={plots}
+              roads={roads}
+              layoutWidth={layout?.original_width || 1200}
+              layoutHeight={layout?.original_height || 964}
+              selectedPlotId={selectedPlotId}
+              onSelectPlot={(p) => setSelectedPlotId(p ? p.id : null)}
+              gpsAnchor={layout?.gps_anchor}
+              accuracyMode={layout?.accuracy_mode || 'calibrated'}
+              projectName={project?.name}
+              projectLocation={project?.location}
+              aerialImageUrl={layout?.aerial_image_url || layout?.file_url}
+              fileUrl={layout?.file_url}
+              onUpdateGpsAnchor={handleUpdateGpsAnchor}
+              onConfirmGcpTransformation={handleConfirmGcpTransformation}
+              onSwitchTo3D={() => setViewMode('3d')}
             />
           ) : (
             <ThreeDLayoutViewer
               layoutWidth={layout?.original_width || 1200}
               layoutHeight={layout?.original_height || 964}
-              fileUrl={layout?.file_url || '/site-grid-48-blueprint.svg'}
+              fileUrl={layout?.aerial_image_url || layout?.file_url}
+              projectName={project?.name}
               plots={plots}
               roads={roads}
               selectedPlotId={selectedPlotId}
-              onSelectPlot={(p) => setSelectedPlotId(p.id)}
+              onSelectPlot={(p) => setSelectedPlotId(p ? p.id : null)}
+              gpsAnchor={layout?.gps_anchor}
             />
           )}
         </div>

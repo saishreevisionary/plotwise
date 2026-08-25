@@ -18,6 +18,8 @@ import {
   Sparkles,
   CheckCircle2,
   AlertTriangle,
+  Trash2,
+  Clock,
 } from 'lucide-react';
 
 export default function ProjectDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,13 +30,42 @@ export default function ProjectDetailsPage({ params }: { params: Promise<{ id: s
   const [layouts, setLayouts] = useState<Layout[]>([]);
   const [showUploader, setShowUploader] = useState(false);
 
-  useEffect(() => {
+  const loadProjectData = () => {
     const proj = AppState.getProjectById(projectId);
     if (proj) {
-      setProject(proj);
+      setProject({ ...proj });
       setLayouts(AppState.getLayoutsByProjectId(projectId));
     }
+  };
+
+  useEffect(() => {
+    loadProjectData();
   }, [projectId]);
+
+  const handleDeleteLayout = (layoutId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (
+      window.confirm(
+        'Are you sure you want to delete this layout digital twin? All associated plots will be removed.'
+      )
+    ) {
+      AppState.deleteLayout(layoutId);
+      loadProjectData();
+    }
+  };
+
+  const handleDeleteProject = () => {
+    if (
+      project &&
+      window.confirm(
+        `Are you sure you want to delete project "${project.name}" and all its layouts? This action cannot be undone.`
+      )
+    ) {
+      AppState.deleteProject(projectId);
+      router.push('/dashboard');
+    }
+  };
 
   if (!project) {
     return (
@@ -73,13 +104,13 @@ export default function ProjectDetailsPage({ params }: { params: Promise<{ id: s
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={() => setShowUploader(true)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.02]"
               >
                 <UploadCloud className="w-4 h-4" />
-                <span>Upload Site Blueprint</span>
+                <span>Upload Layout / Aerial Survey</span>
               </button>
 
               {layouts.length > 0 && (
@@ -91,6 +122,15 @@ export default function ProjectDetailsPage({ params }: { params: Promise<{ id: s
                   <span>Launch 2D/3D Map</span>
                 </Link>
               )}
+
+              <button
+                onClick={handleDeleteProject}
+                className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-500/30 text-xs font-bold transition-all"
+                title="Delete Project"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
             </div>
           </div>
 
@@ -150,7 +190,7 @@ export default function ProjectDetailsPage({ params }: { params: Promise<{ id: s
                 <div>
                   <h3 className="text-base font-bold text-white">No layout uploaded yet</h3>
                   <p className="text-xs text-slate-400 mt-1">
-                    Upload your layout PDF/JPG/PNG file to let AI analyze plot boundaries and convert to 3D.
+                    Upload your Drone Aerial Photo, Satellite survey or CAD Blueprint to derive 2D & 3D site geometry.
                   </p>
                 </div>
                 <button
@@ -170,14 +210,40 @@ export default function ProjectDetailsPage({ params }: { params: Promise<{ id: s
                       className="p-5 rounded-2xl bg-slate-900 border border-slate-800 hover:border-indigo-500/40 transition-all flex flex-col justify-between"
                     >
                       <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-mono text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-md">
-                            {layout.ai_model}
-                          </span>
-                          <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold flex items-center gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                            Completed
-                          </span>
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          {layout.image_source_type === 'drone_aerial' || layout.ai_model?.includes('Drone') ? (
+                            <span className="text-[11px] font-bold text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-sm">
+                              <span>🚁</span>
+                              <span>Drone Aerial Twin</span>
+                            </span>
+                          ) : layout.aerial_image_url || layout.image_source_type === 'satellite' ? (
+                            <span className="text-[11px] font-bold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-sm">
+                              <span>🛰️</span>
+                              <span>Dual-Layer Overlay Twin</span>
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-bold text-indigo-300 bg-indigo-500/15 border border-indigo-500/30 px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-sm">
+                              <span>📐</span>
+                              <span>CAD Blueprint Twin</span>
+                            </span>
+                          )}
+
+                          {layout.processing_status === 'completed' ? (
+                            <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              Verified
+                            </span>
+                          ) : layout.processing_status === 'needs_review' ? (
+                            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                              Needs Review
+                            </span>
+                          ) : (
+                            <span className="text-xs px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-semibold flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                              Processing
+                            </span>
+                          )}
                         </div>
 
                         <div>
@@ -194,17 +260,29 @@ export default function ProjectDetailsPage({ params }: { params: Promise<{ id: s
                         </div>
                       </div>
 
-                      <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between">
+                      <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between gap-2">
                         <span className="text-[11px] text-slate-500">
                           Uploaded {new Date(layout.created_at).toLocaleDateString()}
                         </span>
-                        <Link
-                          href={`/projects/${project.id}/layout/${layout.id}`}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/30"
-                        >
-                          <span>Open Interactive 2D/3D Map</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteLayout(layout.id, e)}
+                            title="Delete Layout"
+                            className="p-2 rounded-lg bg-slate-800 hover:bg-rose-950/80 text-slate-400 hover:text-rose-300 border border-transparent hover:border-rose-500/30 transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+
+                          <Link
+                            href={`/projects/${project.id}/layout/${layout.id}`}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md shadow-indigo-600/30"
+                          >
+                            <span>Open Interactive 2D/3D Map</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   );

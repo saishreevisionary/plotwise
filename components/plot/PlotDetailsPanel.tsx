@@ -21,6 +21,8 @@ import {
   ShieldCheck,
   CheckCircle2,
   Lock,
+  Globe,
+  MapPin,
 } from 'lucide-react';
 
 interface PlotDetailsPanelProps {
@@ -128,7 +130,7 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
   };
 
   return (
-    <aside className="w-full sm:w-96 bg-slate-900 border-l border-slate-800 flex flex-col justify-between h-full shadow-2xl z-30 animate-in slide-in-from-right duration-300">
+    <aside className="w-full sm:w-96 shrink-0 bg-slate-900 border-l border-slate-800 flex flex-col justify-between h-full shadow-2xl z-30 animate-in slide-in-from-right duration-300">
       {/* Drawer Header */}
       <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
         <div>
@@ -325,18 +327,46 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
 
             {/* Core Metrics Grid */}
             <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
-                <span className="text-slate-400 font-semibold flex items-center gap-1">
-                  <Maximize2 className="w-3.5 h-3.5 text-indigo-400" />
-                  Plot Dimensions & Area
-                </span>
-                <span className="text-base font-bold text-white block">
-                  {plot.dimensions_text || `${plot.area.toLocaleString()} sq.ft`}
-                </span>
-                {plot.area_cents && (
-                  <span className="text-[11px] font-semibold text-cyan-400 block">
-                    {plot.area_cents} Cents ({plot.area.toLocaleString()} sq.ft)
-                  </span>
+              {/* Plot Dimensions & Area Card (Dual-Mode Aware) */}
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1 col-span-2">
+                {plot.geo_polygon && plot.geo_polygon.length > 0 && plot.area > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between text-slate-400 font-semibold">
+                      <span className="flex items-center gap-1">
+                        <Maximize2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>GPS CALIBRATED</span>
+                      </span>
+                      <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                        Geodesic Shoelace
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-lg font-extrabold text-white">
+                        Area: {plot.area.toLocaleString()} sq.ft
+                      </span>
+                      <span className="text-xs font-semibold text-cyan-400 font-mono">
+                        ({plot.area_sq_meters ? `${plot.area_sq_meters} m²` : `${(plot.area / 10.7639).toFixed(1)} m²`})
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between text-slate-400 font-semibold">
+                      <span className="flex items-center gap-1">
+                        <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
+                        <span>UNSCALED IMAGE</span>
+                      </span>
+                      <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                        Image Mode
+                      </span>
+                    </div>
+                    <span className="text-sm font-bold text-amber-300 block">
+                      Area unavailable until GPS calibration
+                    </span>
+                    <span className="text-[10px] text-slate-400 block">
+                      Geometry: {plot.polygon_coordinates?.length || 4}-vertex confirmed polygon. Real-world area calculates after 4-point GCP calibration.
+                    </span>
+                  </>
                 )}
               </div>
 
@@ -345,7 +375,9 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
                   <span className="text-emerald-400 font-bold text-sm leading-none">₹</span>
                   Plot Price (INR)
                 </span>
-                <span className="text-base font-bold text-emerald-400 block">{formatPrice(plot.price)}</span>
+                <span className="text-base font-bold text-emerald-400 block">
+                  {plot.area > 0 && plot.price > 0 ? formatPrice(plot.price) : 'Calculated after GPS'}
+                </span>
               </div>
 
               <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
@@ -364,6 +396,48 @@ export const PlotDetailsPanel: React.FC<PlotDetailsPanelProps> = ({
                 <span className="text-xs font-medium text-slate-300 block">
                   {new Date(plot.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </span>
+              </div>
+            </div>
+
+            {/* Geospatial & Boundary Intelligence Card */}
+            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Geospatial Intelligence</span>
+                </span>
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                    plot.geo_polygon && plot.geo_polygon.length > 0
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-slate-800 text-slate-400 border border-slate-700'
+                  }`}
+                >
+                  {plot.geo_polygon && plot.geo_polygon.length > 0 ? 'GPS Calibrated' : 'GPS Not Calibrated'}
+                </span>
+              </div>
+
+              <div className="space-y-1 text-[11px] text-slate-400 font-mono">
+                {plot.geo_polygon && plot.geo_polygon.length > 0 ? (
+                  <div>
+                    <span className="text-slate-500">Center GPS: </span>
+                    <span className="text-cyan-300">
+                      {(plot.geo_polygon.reduce((acc, p) => acc + p[0], 0) / plot.geo_polygon.length).toFixed(6)}° N,{' '}
+                      {(plot.geo_polygon.reduce((acc, p) => acc + p[1], 0) / plot.geo_polygon.length).toFixed(6)}° E
+                    </span>
+                  </div>
+                ) : (
+                  <div>
+                    <span className="text-slate-500">Image Space: </span>
+                    <span className="text-slate-300">
+                      {plot.polygon_coordinates?.length || 4} vertices (GPS calibration not available)
+                    </span>
+                  </div>
+                )}
+                <div className="text-[10px] text-slate-500 flex items-center gap-1 pt-0.5">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                  <span>AI Geometry Confidence: {Math.round(plot.ai_confidence * 100)}%</span>
+                </div>
               </div>
             </div>
 

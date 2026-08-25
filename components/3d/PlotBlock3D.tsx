@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import * as THREE from 'three';
 import { Plot } from '@/types';
 import { Html } from '@react-three/drei';
@@ -11,10 +11,12 @@ interface PlotBlock3DProps {
   layoutWidth: number;
   layoutHeight: number;
   isSelected: boolean;
-  onSelectPlot: (plot: Plot) => void;
+  onSelectPlot: (plot: Plot | null) => void;
   extrudeHeight?: number;
   showVilla?: boolean;
   isWalkMode?: boolean;
+  showDebug?: boolean;
+  gpsOrigin?: { lat: number; lng: number } | null;
 }
 
 export const PlotBlock3D: React.FC<PlotBlock3DProps> = ({
@@ -26,25 +28,67 @@ export const PlotBlock3D: React.FC<PlotBlock3DProps> = ({
   extrudeHeight = 0.6,
   showVilla = true,
   isWalkMode = false,
+  showDebug = false,
+  gpsOrigin = null,
 }) => {
   const [hovered, setHovered] = useState(false);
-  // Suppress hovered state entirely in walk mode to avoid false triggers
   const effectiveHovered = isWalkMode ? false : hovered;
 
-  // Convert 2D image coordinates to 3D Three.js coordinates
+  // Convert 2D pixel or GPS coordinates to Local 3D World Coordinates (meters)
   const worldScaleX = 40 / layoutWidth;
   const worldScaleZ = 27.5 / layoutHeight;
 
-  // Generate 3D Three.js Shape from 2D polygon coordinates
+  // Transform coordinates: Uses GPS coordinates if available, otherwise confirmed image pixel coordinates
+  const local3DPoints = useMemo(() => {
+    // Case 1: Georeferenced Geo-Polygon Available
+    if (plot.geo_polygon && plot.geo_polygon.length >= 3 && gpsOrigin) {
+      const originLatRad = (gpsOrigin.lat * Math.PI) / 180;
+      const mPerLat = 111139.0;
+      const mPerLng = 111139.0 * Math.cos(originLatRad);
+      const geoScale = 0.45; // 1 meter = 0.45 Three.js scene units
+
+      return plot.geo_polygon.map((pt) => {
+        const dLat = pt[0] - gpsOrigin.lat;
+        const dLng = pt[1] - gpsOrigin.lng;
+        const eastMeters = dLng * mPerLng;
+        const northMeters = dLat * mPerLat;
+        return [eastMeters * geoScale, -northMeters * geoScale] as [number, number];
+      });
+    }
+
+    // Case 2: Confirmed Image Mode Pixel Polygon
+    const coords = plot.polygon_coordinates || [];
+    return coords.map((pt) => [
+      (pt[0] - layoutWidth / 2) * worldScaleX,
+      (pt[1] - layoutHeight / 2) * worldScaleZ,
+    ] as [number, number]);
+  }, [plot.geo_polygon, plot.polygon_coordinates, gpsOrigin, layoutWidth, layoutHeight, worldScaleX, worldScaleZ]);
+
+  // Log debug verification data when debug mode is enabled
+  useEffect(() => {
+    if (showDebug && local3DPoints.length > 0) {
+      console.log(`[3D Digital Twin Sync] Plot ${plot.plot_number}:`, {
+        plotId: plot.id,
+        plotNumber: plot.plot_number,
+        vertexCount: local3DPoints.length,
+        isGpsCalibrated: !!(plot.geo_polygon && plot.geo_polygon.length > 0),
+        gpsPolygon: plot.geo_polygon || 'Image Mode (Uncalibrated)',
+        local3DVertices: local3DPoints,
+        areaSqFt: plot.area,
+        areaSqMeters: plot.area_sq_meters,
+      });
+    }
+  }, [showDebug, plot, local3DPoints]);
+
+  // Generate 3D Three.js Shape with 100% vertex parity
   const geometry = useMemo(() => {
-    const coords = plot.polygon_coordinates;
-    if (!coords || coords.length < 3) return null;
+    if (!local3DPoints || local3DPoints.length < 3) return null;
 
     const shape = new THREE.Shape();
 
-    coords.forEach((pt, idx) => {
-      const x = (pt[0] - layoutWidth / 2) * worldScaleX;
-      const z = (pt[1] - layoutHeight / 2) * worldScaleZ;
+    local3DPoints.forEach((pt, idx) => {
+      const x = pt[0];
+      const z = pt[1];
 
       if (idx === 0) {
         shape.moveTo(x, -z);
@@ -55,47 +99,43 @@ export const PlotBlock3D: React.FC<PlotBlock3DProps> = ({
 
     shape.closePath();
 
-    const currentExtrudeHeight = isSelected ? extrudeHeight * 1.6 : effectiveHovered ? extrudeHeight * 1.25 : extrudeHeight;
-
     const extrudeSettings: THREE.ExtrudeGeometryOptions = {
-      depth: currentExtrudeHeight,
+      depth: extrudeHeight,
       bevelEnabled: true,
       bevelSegments: 2,
       steps: 1,
-      bevelSize: 0.05,
-      bevelThickness: 0.05,
+      bevelSize: 0.04,
+      bevelThickness: 0.04,
     };
 
     const geom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
     geom.rotateX(-Math.PI / 2);
     return geom;
-  }, [plot.polygon_coordinates, layoutWidth, layoutHeight, extrudeHeight, isSelected, effectiveHovered]);
+  }, [local3DPoints, extrudeHeight]);
 
-  // Center coordinate for label tooltip and villa position
+  // Center coordinate for label tooltip, debug spheres, and villa position
   const centerPos = useMemo(() => {
-    const coords = plot.polygon_coordinates;
-    if (!coords || coords.length === 0) return { center: [0, 1, 0] as [number, number, number], vertices: [] };
+    if (!local3DPoints || local3DPoints.length === 0) {
+      return { center: [0, 1, 0] as [number, number, number], villaPos: [0, 0.6, 0] as [number, number, number], vertices: [] };
+    }
 
-    const cx = coords.reduce((sum, p) => sum + p[0], 0) / coords.length;
-    const cy = coords.reduce((sum, p) => sum + p[1], 0) / coords.length;
+    const cx = local3DPoints.reduce((sum, p) => sum + p[0], 0) / local3DPoints.length;
+    const cz = local3DPoints.reduce((sum, p) => sum + p[1], 0) / local3DPoints.length;
+    const wy = isSelected ? extrudeHeight * 1.8 + 0.3 : extrudeHeight + 0.25;
 
-    const wx = (cx - layoutWidth / 2) * worldScaleX;
-    const wz = (cy - layoutHeight / 2) * worldScaleZ;
-    const wy = isSelected ? extrudeHeight * 1.8 + 0.3 : extrudeHeight + 0.2;
+    const vertices3D = local3DPoints.map((pt) => [pt[0], extrudeHeight + 0.05, pt[1]] as [number, number, number]);
 
-    const vertices3D = coords.map((pt) => [
-      (pt[0] - layoutWidth / 2) * worldScaleX,
-      0.6,
-      (pt[1] - layoutHeight / 2) * worldScaleZ,
-    ] as [number, number, number]);
-
-    return { center: [wx, wy, wz] as [number, number, number], villaPos: [wx, 0.6, wz] as [number, number, number], vertices: vertices3D };
-  }, [plot.polygon_coordinates, layoutWidth, layoutHeight, extrudeHeight, isSelected]);
+    return {
+      center: [cx, wy, cz] as [number, number, number],
+      villaPos: [cx, extrudeHeight, cz] as [number, number, number],
+      vertices: vertices3D,
+    };
+  }, [local3DPoints, extrudeHeight, isSelected]);
 
   // Status Material colors
   const materialColor = useMemo(() => {
     if (isSelected) return '#22d3ee';
-    if (effectiveHovered) return '#67e8f9';
+    if (effectiveHovered) return '#38bdf8';
 
     switch (plot.status) {
       case 'available':
@@ -109,81 +149,96 @@ export const PlotBlock3D: React.FC<PlotBlock3DProps> = ({
     }
   }, [plot.status, isSelected, effectiveHovered]);
 
+  // Clean up pointer cursor if component unmounts while hovered
+  useEffect(() => {
+    return () => {
+      if (hovered) {
+        document.body.style.cursor = 'auto';
+      }
+    };
+  }, [hovered]);
+
   if (!geometry) return null;
 
   const renderVilla = showVilla && (plot.status === 'booked' || plot.status === 'sold');
 
   return (
     <group
-      position={[0, effectiveHovered ? 0.15 : 0, 0]}
+      position={[0, isSelected ? 0.2 : effectiveHovered ? 0.1 : 0, 0]}
+      scale={[1, isSelected ? 1.35 : effectiveHovered ? 1.15 : 1, 1]}
       onClick={(e) => {
         e.stopPropagation();
-        onSelectPlot(plot);
+        onSelectPlot(isSelected ? null : plot);
       }}
       onPointerOver={(e) => {
         if (isWalkMode) return;
         e.stopPropagation();
         setHovered(true);
+        document.body.style.cursor = 'pointer';
       }}
       onPointerOut={() => {
         if (isWalkMode) return;
         setHovered(false);
+        document.body.style.cursor = 'auto';
       }}
     >
-      {/* Extruded 3D Glassmorphic Land Mesh (Semi-transparent) */}
+      {/* Extruded 3D Glassmorphic Land Mesh */}
       <mesh geometry={geometry} castShadow receiveShadow>
         <meshStandardMaterial
           color={materialColor}
           transparent={true}
-          opacity={isSelected ? 0.75 : effectiveHovered ? 0.65 : 0.5}
+          opacity={isSelected ? 0.85 : effectiveHovered ? 0.75 : 0.55}
           roughness={0.2}
-          metalness={0.3}
-          emissive={isSelected ? materialColor : effectiveHovered ? materialColor : '#000000'}
-          emissiveIntensity={isSelected ? 0.5 : effectiveHovered ? 0.3 : 0}
+          metalness={0.1}
+          wireframe={showDebug}
         />
       </mesh>
 
-      {/* Wireframe Outline for crisp architectural boundary */}
-      <lineSegments position={[0, 0.01, 0]}>
-        <edgesGeometry args={[geometry]} />
-        <lineBasicMaterial color={isSelected ? '#22d3ee' : effectiveHovered ? '#ffffff' : '#1e293b'} linewidth={2} />
-      </lineSegments>
+      {/* Debug Mode: Glowing Vertex Corner Spheres */}
+      {showDebug &&
+        centerPos.vertices.map((vPos, idx) => (
+          <mesh key={idx} position={vPos}>
+            <sphereGeometry args={[0.15, 8, 8]} />
+            <meshBasicMaterial color="#f59e0b" />
+          </mesh>
+        ))}
 
-      {/* Corner Boundary Posts */}
-      {centerPos.vertices.map((vPos, idx) => (
-        <mesh key={idx} position={vPos}>
-          <cylinderGeometry args={[0.04, 0.04, 0.2, 6]} />
-          <meshStandardMaterial color={isSelected ? '#22d3ee' : '#f59e0b'} />
-        </mesh>
-      ))}
-
-      {/* 3D Villa Placeholder Model on Booked/Sold Plots */}
-      {renderVilla && <VillaModel3D position={centerPos.villaPos} scale={0.4} />}
-
-      {/* 3D Floating HTML Plot Number & Dimension Badge */}
-      <Html position={centerPos.center} center distanceFactor={25} zIndexRange={[100, 0]}>
+      {/* Plot Number & Real-World Area Badge Overlay */}
+      <Html position={centerPos.center} center distanceFactor={24} zIndexRange={[100, 0]}>
         <div
-          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold tracking-wider pointer-events-none transition-all shadow-xl whitespace-nowrap flex flex-col items-center gap-0.5 ${
+          className={`pointer-events-none transition-all duration-200 select-none ${
             isSelected
-              ? 'bg-cyan-400 text-slate-950 scale-110 font-extrabold ring-2 ring-cyan-300'
+              ? 'scale-125 font-bold'
               : effectiveHovered
-              ? 'bg-white text-slate-950 scale-105'
-              : 'bg-slate-950/90 text-slate-100 border border-slate-700'
+              ? 'scale-110'
+              : 'opacity-90'
           }`}
         >
-          <div className="flex items-center gap-1">
-            <span>Plot {plot.plot_number}</span>
-            {plot.status === 'available' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
-            {plot.status === 'booked' && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
-            {plot.status === 'sold' && <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />}
+          <div
+            className={`px-2 py-1 rounded-lg text-xs flex flex-col items-center gap-0.5 shadow-xl border backdrop-blur-md ${
+              isSelected
+                ? 'bg-cyan-950/95 border-cyan-400 text-cyan-200 ring-2 ring-cyan-400/50'
+                : 'bg-slate-950/85 border-slate-700 text-white'
+            }`}
+          >
+            <div className="font-extrabold flex items-center gap-1">
+              <span>{plot.plot_number}</span>
+              {showDebug && (
+                <span className="text-[9px] px-1 rounded bg-amber-500/20 text-amber-300 font-mono">
+                  {local3DPoints.length}v
+                </span>
+              )}
+            </div>
+            <div className="text-[10px] text-slate-300 font-medium">
+              {plot.geo_polygon && plot.geo_polygon.length > 0 && plot.area > 0 ? `${plot.area} sq.ft` : 'Uncalibrated'}
+            </div>
           </div>
-          {plot.area_cents && (
-            <span className={`text-[10px] ${isSelected ? 'text-slate-900 font-bold' : 'text-cyan-400 font-semibold'}`}>
-              {plot.dimensions_text || `${plot.area_cents} Cents`}
-            </span>
-          )}
         </div>
       </Html>
+
+      {/* 3D Modern Villa Architecture Model (if booked/sold) */}
+      {renderVilla && <VillaModel3D position={centerPos.villaPos} />}
     </group>
   );
 };
+

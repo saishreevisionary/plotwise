@@ -4,28 +4,34 @@ import { LayoutAnalyzerService } from '@/lib/ai/layout-analyzer';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { image, provider, width, height } = body;
+    const { image, provider, preset, width, height, apiKey: clientApiKey } = body;
 
-    if (!image) {
-      return NextResponse.json({ error: 'Image parameter is required' }, { status: 400 });
+    if (!image && !preset) {
+      return NextResponse.json({ error: 'Image parameter or preset is required' }, { status: 400 });
     }
 
+    const targetWidth = Number(width) || 1200;
+    const targetHeight = Number(height) || 1600;
+
     const selectedProvider =
+      preset ||
       provider ||
       process.env.AI_PROVIDER ||
-      (process.env.GEMINI_API_KEY ? 'gemini' : process.env.OPENAI_API_KEY ? 'openai' : 'contour');
+      (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY ? 'gemini' : process.env.OPENAI_API_KEY ? 'openai' : 'contour');
 
     const apiKey =
+      clientApiKey ||
       process.env.AI_API_KEY ||
       process.env.GEMINI_API_KEY ||
       process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
       process.env.OPENAI_API_KEY;
 
-    const result = await LayoutAnalyzerService.analyzeLayout(image, {
+    const result = await LayoutAnalyzerService.analyzeLayout(image || '', {
       provider: selectedProvider as any,
       apiKey,
-      imageWidth: width || 1600,
-      imageHeight: height || 1200,
+      imageWidth: targetWidth,
+      imageHeight: targetHeight,
     });
 
     return NextResponse.json({ success: true, provider: selectedProvider, data: result });
